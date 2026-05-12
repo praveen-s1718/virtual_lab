@@ -33,7 +33,7 @@ const useSimulationStore = create((set, get) => ({
 
   // ── Pending experiment loader ──
   pendingExperiment: null,
-  setPendingExperiment: (exp) => set({ pendingExperiment: exp, activeExperimentConfig: exp }),
+  setPendingExperiment: (exp) => set((state) => ({ pendingExperiment: exp, activeExperimentConfig: exp !== null ? exp : state.activeExperimentConfig })),
   activeExperimentConfig: null,
   setActiveExperimentConfig: (exp) => set({ activeExperimentConfig: exp }),
 

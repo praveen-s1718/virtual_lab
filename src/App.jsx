@@ -47,7 +47,7 @@ export default function App() {
           <SharedCanvasHome />
         </main>
       ) : (
-        <SimulationPage key={activePage} isShared={activePage === 'shared-canvas'} />
+        <SimulationPage isShared={activePage === 'shared-canvas'} />
       )}
     </div>
   )

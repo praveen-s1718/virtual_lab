@@ -148,20 +148,6 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
     }
   }, [runState]) // eslint-disable-line
 
-  /* ── Clear canvas on exiting experiment ── */
-  const pendingExperiment = useSimulationStore((state) => state.pendingExperiment)
-  useEffect(() => {
-    if (!pendingExperiment && engineRef.current) {
-      const engine = engineRef.current
-      const bodies = Composite.allBodies(engine.world)
-      bodies.filter((b) => b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse').forEach((b) => Composite.remove(engine.world, b))
-      const constraints = Composite.allConstraints(engine.world)
-      constraints.filter((c) => c.label !== 'Mouse Constraint').forEach((c) => Composite.remove(engine.world, c))
-      useSimulationStore.getState().setInspectedEntity(null)
-      useSimulationStore.getState().setSelectedBody(null)
-    }
-  }, [pendingExperiment])
-
   /* ─────────────────────── REACTIVE ENVIRONMENT ──────────────────────── */
   useEffect(() => {
     const engine = engineRef.current
