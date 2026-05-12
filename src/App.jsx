@@ -6,6 +6,7 @@ import ControlPalette from './components/ControlPalette'
 import AnalyticsPanel from './components/AnalyticsPanel'
 import LibraryPage from './pages/LibraryPage'
 import SharedCanvasHome from './pages/SharedCanvasHome'
+import LandingPage from './pages/LandingPage'
 import useSimulationStore from './store/simulationStore'
 
 /* ── Simulation page ── */
@@ -27,7 +28,12 @@ function SimulationPage({ isShared }) {
 
 /* ── Root App ── */
 export default function App() {
-  const { activePage, activeSharedProjectId } = useSimulationStore()
+  const { activePage, activeSharedProjectId, showLanding, dismissLanding } = useSimulationStore()
+
+  /* Show landing page first */
+  if (showLanding) {
+    return <LandingPage onEnter={dismissLanding} />
+  }
 
   return (
     <div className="bg-surface text-on-surface font-body h-screen w-screen overflow-hidden">

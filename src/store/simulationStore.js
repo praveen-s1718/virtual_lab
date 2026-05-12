@@ -16,6 +16,10 @@ const saveSharedProjects = (projects) => {
 }
 
 const useSimulationStore = create((set, get) => ({
+  // ── Landing page gate ──
+  showLanding: true,
+  dismissLanding: () => set({ showLanding: false }),
+
   // ── Side Nav active tool tab ──
   activeTab: 'objects',
   setActiveTab: (tab) => set({ activeTab: tab }),
