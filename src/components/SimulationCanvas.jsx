@@ -105,8 +105,8 @@ export default function SimulationCanvas({ isShared }) {
           })
         }
       }, 50)
-    } else if (!pendingExperiment && runState !== 'idle') {
-      // Reset guard when leaving idle or clearing experiment
+    } else if (runState !== 'idle') {
+      // Allow the experiment to be re-loaded the next time we return to idle (RESET)
       loaderFiredRef.current = false
     }
   }, [pendingExperiment, addBody, addLock, addJoint, runState, setPendingExperiment])

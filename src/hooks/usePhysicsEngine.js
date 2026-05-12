@@ -126,8 +126,19 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
       Runner.stop(runner)
       engine.timing.timeScale = 1
 
+      const pendingExp = useSimulationStore.getState().pendingExperiment
+
       const bodies = Composite.allBodies(engine.world)
-      bodies.filter((b) => !b.isStatic).forEach((b) => Composite.remove(engine.world, b))
+      if (pendingExp) {
+        // If an experiment is loaded, we clear everything except the default ground and walls
+        // so that SimulationCanvas can cleanly reload the experiment from scratch.
+        bodies.filter((b) => b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse').forEach((b) => Composite.remove(engine.world, b))
+      } else {
+        // In the free canvas, we just clear non-static user bodies on reset? 
+        // Or we also clear everything? "dont remove anything when i click reset in library not in canvas"
+        // That means in the canvas it SHOULD clear things (or the current behavior is fine).
+        bodies.filter((b) => !b.isStatic).forEach((b) => Composite.remove(engine.world, b))
+      }
       
       const constraints = Composite.allConstraints(engine.world)
       constraints.filter((c) => c.label !== 'Mouse Constraint').forEach((c) => Composite.remove(engine.world, c))
