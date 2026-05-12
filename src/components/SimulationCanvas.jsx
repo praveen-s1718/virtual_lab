@@ -1,0 +1,367 @@
+import { useRef, useCallback, useEffect, useState } from 'react'
+import Matter from 'matter-js'
+import usePhysicsEngine from '../hooks/usePhysicsEngine'
+import useCollaboration from '../hooks/useCollaboration'
+import CollaboratorCursor from './canvas/CollaboratorCursor'
+import useSimulationStore from '../store/simulationStore'
+import { connectSocket, getSocket } from '../services/socket'
+
+/* Assign a colour to a remote user deterministically */
+const COLLAB_COLORS = ['primary', 'secondary', 'tertiary']
+const getColor = (id) => COLLAB_COLORS[Math.abs(hashCode(id)) % COLLAB_COLORS.length]
+function hashCode(str) {
+  let h = 0
+  for (let i = 0; i < str.length; i++) h = (Math.imul(31, h) + str.charCodeAt(i)) | 0
+  return h
+}
+
+export default function SimulationCanvas({ isShared }) {
+  const containerRef = useRef(null)
+  const canvasRef    = useRef(null)
+
+  const {
+    runState, setAddBodyFn, setAddJointFn, setRemoveEntityFn, remoteCollaborators, setSocketConnected,
+    activeTool, setActiveTool, selectedBody, setSelectedBody, inspectedEntity, setInspectedEntity
+  } = useSimulationStore()
+  const { 
+    addBody, addJoint, queryEntityAt, addLock, removeEntity,
+    applyImpulse, applyExplosion, clearBodyForces
+  } = usePhysicsEngine(canvasRef, containerRef)
+
+  /* Register addBody/Joint in store so ControlPalette can call spawn() */
+  useEffect(() => { 
+    setAddBodyFn(addBody) 
+    setAddJointFn(addJoint)
+    setRemoveEntityFn(removeEntity)
+  }, [addBody, addJoint, removeEntity, setAddBodyFn, setAddJointFn, setRemoveEntityFn])
+
+  /* Read pending experiment from Library load */
+  const pendingExperiment = useSimulationStore(state => state.pendingExperiment)
+  const setPendingExperiment = useSimulationStore(state => state.setPendingExperiment)
+  const loaderFiredRef = useRef(false)
+  useEffect(() => {
+    if (pendingExperiment && addBody && runState === 'idle') {
+      if (loaderFiredRef.current) return
+      loaderFiredRef.current = true
+
+      const exp = pendingExperiment
+      // Clear immediately to prevent React double-effect firing and cloning the setup
+      setPendingExperiment(null)
+      
+      const w = containerRef.current?.clientWidth || window.innerWidth
+      const h = containerRef.current?.clientHeight || window.innerHeight
+      setTimeout(() => {
+        const lookup = {}
+        // Spawn bodies
+        if (exp.bodies) {
+          exp.bodies.forEach((b) => {
+            const spawnX = (b.x !== undefined ? w * b.x : w * 0.5) + (b.px || 0)
+            const spawnY = (b.y !== undefined ? h * b.y : h * 0.5) + (b.py || 0)
+            const bodyInst = addBody(b.type, spawnX, spawnY)
+            if (bodyInst) {
+              if (b.label) bodyInst.label = b.label
+              if (b.id) lookup[b.id] = bodyInst
+              // Apply per-body props from experiment config
+              if (b.props) {
+                if (b.props.mass) Matter.Body.setMass(bodyInst, b.props.mass)
+                if (b.props.radius && bodyInst.circleRadius) {
+                  const scaleFactor = b.props.radius / bodyInst.circleRadius
+                  Matter.Body.scale(bodyInst, scaleFactor, scaleFactor)
+                  // Re-apply mass after scale since scale changes mass
+                  if (b.props.mass) Matter.Body.setMass(bodyInst, b.props.mass)
+                }
+                if (b.props.friction !== undefined) bodyInst.friction = b.props.friction
+                if (b.props.frictionStatic !== undefined) bodyInst.frictionStatic = b.props.frictionStatic
+                if (b.props.frictionAir !== undefined) bodyInst.frictionAir = b.props.frictionAir
+                if (b.props.restitution !== undefined) bodyInst.restitution = b.props.restitution
+              }
+            }
+          })
+        }
+        // Spawn locks
+        if (exp.locks && addLock) {
+          exp.locks.forEach((lk) => {
+            const b = lookup[lk.bodyId]
+            if (b) {
+              const lockX = (lk.x !== undefined ? w * lk.x : b.position.x) + (lk.px || 0)
+              const lockY = (lk.y !== undefined ? h * lk.y : b.position.y) + (lk.py || 0)
+              addLock(lk.type, b, lockX, lockY)
+            }
+          })
+        }
+        if (exp.joints && addJoint) {
+          exp.joints.forEach((jt) => {
+            const bA = lookup[jt.bodyIdA]
+            const bB = lookup[jt.bodyIdB]
+            if (bA) {
+              let posB = null
+              if (!jt.bodyIdB) {
+                const bX = (jt.posB?.x !== undefined ? w * jt.posB.x : w * 0.5) + (jt.posB?.px || 0)
+                const bY = (jt.posB?.y !== undefined ? h * jt.posB.y : h * 0.5) + (jt.posB?.py || 0)
+                posB = { x: bX, y: bY }
+              }
+              addJoint(jt.type, bA, jt.offsetA || null, posB, bB || null, jt.offsetB || null)
+            }
+          })
+        }
+      }, 50)
+    } else if (!pendingExperiment && runState !== 'idle') {
+      // Reset guard when leaving idle or clearing experiment
+      loaderFiredRef.current = false
+    }
+  }, [pendingExperiment, addBody, addLock, addJoint, runState, setPendingExperiment])
+
+  /* ── Collaboration hook ── */
+  const { emitCursor, emitSpawn } = useCollaboration(containerRef, isShared)
+  const [hoverPoint, setHoverPoint] = useState(null)
+
+  const handleMouseMove = useCallback((e) => {
+    emitCursor(e)
+    if (activeTool?.category === 'joint' && queryEntityAt && containerRef.current) {
+      const rect = containerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+      const hit = queryEntityAt(x, y)
+      if (hit?.type === 'body') {
+        const dx = x - hit.entity.position.x
+        const dy = y - hit.entity.position.y
+        setHoverPoint({ x: e.clientX, y: e.clientY, dx, dy })
+      } else {
+        setHoverPoint(null)
+      }
+    } else if (hoverPoint) {
+      setHoverPoint(null)
+    }
+  }, [emitCursor, activeTool, queryEntityAt, hoverPoint])
+
+  /* Track socket connection status */
+  useEffect(() => {
+    const socket = getSocket()
+    const onConnect    = () => setSocketConnected(true)
+    const onDisconnect = () => setSocketConnected(false)
+    socket.on('connect',    onConnect)
+    socket.on('disconnect', onDisconnect)
+    setSocketConnected(socket.connected)
+    return () => {
+      socket.off('connect',    onConnect)
+      socket.off('disconnect', onDisconnect)
+    }
+  }, [setSocketConnected])
+
+  /* ── Drag-and-drop from palette ── */
+  const handleDragOver = useCallback((e) => {
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'copy'
+    const ind = document.getElementById('drop-indicator')
+    if (ind) ind.style.borderColor = 'rgba(47,245,255,0.25)'
+  }, [])
+
+  const handleDragLeave = useCallback(() => {
+    const ind = document.getElementById('drop-indicator')
+    if (ind) ind.style.borderColor = 'rgba(47,245,255,0)'
+  }, [])
+
+  const handleDrop = useCallback(
+    (e) => {
+      e.preventDefault()
+      const ind = document.getElementById('drop-indicator')
+      if (ind) ind.style.borderColor = 'rgba(47,245,255,0)'
+
+      if (!containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      const x = e.clientX - rect.left
+      const y = e.clientY - rect.top
+
+      // Add Body
+      const type = e.dataTransfer.getData('body-type')
+      if (type) {
+        addBody(type, x, y)
+        emitSpawn(type, x, y)   // broadcast to room
+        return
+      }
+
+      // Add Joint (legacy drag/drop support)
+      const jointType = e.dataTransfer.getData('joint-type')
+      if (jointType) {
+        // Find nearest body to attach to (fallback)
+        addJoint?.(jointType, null, {x, y}, null)
+        return
+      }
+    },
+    [addBody, addJoint, emitSpawn],
+  )
+  /* Forces state */
+  const activeForceTool = useSimulationStore(state => state.activeForceTool)
+  const setActiveForceTool = useSimulationStore(state => state.setActiveForceTool)
+  const manualForceVector = useSimulationStore(state => state.manualForceVector)
+
+  /* ── Click-to-Connect Tool Logic ── */
+  const handleCanvasClick = useCallback((e) => {
+    if (!containerRef.current || !queryEntityAt) return
+    
+    const rect = containerRef.current.getBoundingClientRect()
+    const x = e.clientX - rect.left
+    const y = e.clientY - rect.top
+    const hit = queryEntityAt(x, y) // { type: 'body'|'constraint', entity }
+
+    // Selection Mode (only if absolutely no tools are active)
+    if (!activeTool && !activeForceTool) {
+      if (hit) {
+        setInspectedEntity(hit)
+      } else {
+        setInspectedEntity(null) // deselect
+      }
+      return
+    }
+
+    if (activeTool) {
+
+    if (activeTool.category === 'lock') {
+      if (hit?.type === 'body') {
+        addLock(activeTool.type, hit.entity, x, y)
+        setActiveTool(null) // clear tool after use
+      }
+    } else if (activeTool.category === 'joint') {
+      const localOffset = hit?.type === 'body' 
+        ? { x: x - hit.entity.position.x, y: y - hit.entity.position.y }
+        : null
+
+      if (!selectedBody) {
+        // Step 1: Select first body
+        if (hit?.type === 'body') {
+          setSelectedBody({ entity: hit.entity, offset: localOffset })
+        }
+      } else {
+        // Step 2: Link to second body or background
+        if (hit?.type === 'body' && hit.entity.id === selectedBody.entity.id) return // same body, ignore
+        
+        addJoint(
+          activeTool.type, 
+          selectedBody.entity, 
+          selectedBody.offset, 
+          { x, y }, 
+          hit?.type === 'body' ? hit.entity : null, 
+          localOffset
+        )
+      }
+    }
+  }
+
+  // ── Force Tools ──
+  if (activeForceTool === 'manual') {
+      if (hit?.type === 'body') {
+        const relPos = { x: x - hit.entity.position.x, y: y - hit.entity.position.y }
+        // Add to persistent forces list
+        if (!hit.entity.appliedForces) hit.entity.appliedForces = []
+        hit.entity.appliedForces.push({
+          id: Date.now(),
+          i: manualForceVector.i,
+          j: manualForceVector.j,
+          relativePos: relPos
+        })
+      }
+    } else if (activeForceTool === 'clear') {
+      if (hit?.type === 'body') {
+        clearBodyForces(hit.entity)
+      }
+    }
+  }, [activeTool, activeForceTool, manualForceVector, selectedBody, queryEntityAt, addLock, addJoint, applyImpulse, applyExplosion, clearBodyForces, setActiveTool, setSelectedBody, setInspectedEntity])
+
+  /* ── Run-state hint ── */
+  let hint = null
+  if (activeTool) {
+    if (activeTool.category === 'lock') {
+      hint = { text: `LOCK TOOL ACTIVE: Click an object to apply ${activeTool.type.replace('-', ' ')}`, color: 'text-tertiary' }
+    } else if (activeTool.category === 'joint') {
+      hint = { 
+        text: selectedBody ? `JOINT: Click second object or space to attach` : `JOINT TOOL ACTIVE: Click first object to attach ${activeTool.type}`,
+        color: 'text-primary'
+      }
+    }
+  } else if (activeForceTool) {
+    const forceHints = {
+      wind:      { text: 'WIND ACTIVE: Global horizontal current applied to all bodies', color: 'text-amber-400' },
+      thrust:    { text: 'THRUST TOOL: Click any object on the canvas to launch it upwards',  color: 'text-amber-400' },
+      explosion: { text: 'EXPLOSION TOOL: Click anywhere to create a blast wave',             color: 'text-amber-400' },
+    }
+    hint = forceHints[activeForceTool]
+  } else {
+    const hintMap = {
+      idle:    { text: 'Drag objects from the panel → drop here  •  Press RUN to simulate', color: 'text-outline' },
+      running: null,
+      slowmo:  { text: '0.25× Slow Motion active', color: 'text-secondary/60' },
+      paused:  { text: 'Paused — Press RUN to continue',           color: 'text-tertiary/60' },
+    }
+    hint = hintMap[runState]
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className={`relative w-full h-full overflow-hidden ${activeTool ? 'cursor-crosshair' : ''}`}
+      onMouseMove={handleMouseMove}
+      onMouseDown={handleCanvasClick}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      {/* ── Matter.js canvas ── */}
+      <canvas
+        ref={canvasRef}
+        id="simulation-canvas"
+        className="absolute inset-0"
+        style={{ width: '100%', height: '100%', display: 'block' }}
+      />
+
+      {/* ── Ground visual line ── */}
+      <div className="absolute bottom-0 left-0 right-0 h-px bg-outline-variant/30 pointer-events-none" />
+
+      {/* ── Live remote cursors from socket ── */}
+      {remoteCollaborators.map((user) =>
+        user.cursor ? (
+          <CollaboratorCursor
+            key={user.id}
+            name={user.name?.toUpperCase() ?? user.id.slice(0, 6).toUpperCase()}
+            color={getColor(user.id)}
+            x={user.cursor.x}
+            y={user.cursor.y}
+            icon="near_me"
+            action={user.action}
+          />
+        ) : null,
+      )}
+
+      {/* ── Run state hint ── */}
+      {hint && (
+        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 pointer-events-none">
+          <span className={`text-[10px] font-label uppercase tracking-widest ${hint.color}`}>
+            {hint.text}
+          </span>
+        </div>
+      )}
+
+      {/* ── Drop indicator border ── */}
+      <div
+        id="drop-indicator"
+        className="absolute inset-3 border-2 border-dashed rounded-xl pointer-events-none transition-all duration-200"
+        style={{ borderColor: 'rgba(47,245,255,0)' }}
+      />
+
+      {/* ── Hover Offset Tooltip ── */}
+      {hoverPoint && (() => {
+        // Cartesian math standard: Up is positive Y. Canvas standard: Up is negative Y.
+        // We flip dy exclusively for display so the user sees a typical Cartesian plane.
+        const displayDy = -hoverPoint.dy
+
+        return (
+          <div 
+            className="fixed z-50 pointer-events-none px-2 py-1 bg-surface-container-highest/90 backdrop-blur-md rounded border border-outline-variant/30 text-[9px] font-label font-bold text-primary tracking-widest uppercase shadow-md transition-opacity"
+            style={{ left: hoverPoint.x + 15, top: hoverPoint.y + 15 }}
+          >
+            {hoverPoint.dx > 0 ? '+' : ''}{hoverPoint.dx.toFixed(0)}, {displayDy > 0 ? '+' : ''}{displayDy.toFixed(0)}
+          </div>
+        )
+      })()}
+    </div>
+  )
+}

@@ -1,0 +1,187 @@
+/**
+ * Pre-built physics experiment templates.
+ * Custom built for Educational Labs.
+ *
+ * Coordinate convention:
+ *   x, y  — fraction of canvas (0..1)
+ *   px, py — pixel offset added after fraction
+ */
+export const EXPERIMENTS = [
+  /* ═══════════════════════════════════════════════════════════
+   * 1. SIMPLE PENDULUM
+   * A roof beam at the top, a weighted bob hanging from a rope
+   * constraint. The bob starts at ~30° from vertical so it
+   * swings immediately when the user presses RUN.
+   * ═══════════════════════════════════════════════════════════ */
+  {
+    id: 'exp-pendulum',
+    title: 'Simple Pendulum Lab',
+    author: 'System',
+    authorColor: 'primary',
+    category: 'Oscillations',
+    difficulty: 'Beginner',
+    tags: ['gravity', 'periodic', 'swing'],
+    description: 'A classic simple pendulum demonstrating periodic motion, gravitational potential energy, and conservation principles.',
+    bodies: [
+      // Roof beam at the top center — the pivot mounts to this
+      { id: 'beam', type: 'roof', x: 0.5, y: 0.08, label: 'PendulumBeam' },
+      // Bob placed at 30° from vertical: dx = L*sin(30°), dy = L*cos(30°) with L≈250px
+      // sin30=0.5 → dx=-125, cos30=0.866 → dy=217
+      { id: 'bob', type: 'sphere', x: 0.5, px: -125, y: 0.08, py: 237, label: 'PendulumBob', props: { mass: 5, radius: 20, frictionAir: 0.005 } },
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'beam' }
+    ],
+    joints: [
+      // Rope joint: connects beam center to bob with the actual rope length preserved
+      { type: 'rope', bodyIdA: 'beam', bodyIdB: 'bob' }
+    ],
+    svgPreview: 'pendulum',
+    stats: { bodies: 2, joints: 1, runtime: 'Live' },
+    customUI: 'pendulum'
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+   * 2. PROJECTILE MOTION
+   * A static cannon (rectangle barrel) on the left and a
+   * floor at the bottom. The ExperimentControls "FIRE" button
+   * spawns a projectile sphere at the tip.
+   * ═══════════════════════════════════════════════════════════ */
+  {
+    id: 'exp-projectile',
+    title: 'Projectile Motion Simulator',
+    author: 'System',
+    authorColor: 'secondary',
+    category: 'Kinematics',
+    difficulty: 'Intermediate',
+    tags: ['trajectory', 'velocity', 'parabola'],
+    description: 'Analyze parabolic trajectories under gravitational influence. Adjust launch angle and initial velocity.',
+    bodies: [
+      { id: 'cannon', type: 'cannon', x: 0.08, y: 0.75, label: 'Launcher' },
+      { id: 'ground', type: 'floor',  x: 0.5,  y: 0.88, label: 'GroundPlane' }
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'cannon' },
+      { type: 'freeze', bodyId: 'ground' }
+    ],
+    svgPreview: 'projectile',
+    stats: { bodies: 2, joints: 0, runtime: 'Live' },
+    customUI: 'projectile'
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+   * 3. PULLEY / ATWOOD MACHINE
+   * Static pulley wheel at top centre. Two hanging masses
+   * positioned directly below each side of the wheel so the
+   * custom Atwood sync in beforeUpdate works immediately.
+   * ═══════════════════════════════════════════════════════════ */
+  {
+    id: 'exp-pulley',
+    title: 'Pulley & Weight System',
+    author: 'System',
+    authorColor: 'tertiary',
+    category: 'Mechanics',
+    difficulty: 'Intermediate',
+    tags: ['tension', 'mass', 'acceleration'],
+    description: 'Two hanging masses connected by a rope over a fixed pulley (Atwood machine). Measure tension and acceleration.',
+    bodies: [
+      { id: 'pulleyCenter', type: 'pulleyWheel', x: 0.5, y: 0.15, label: 'PulleyWheel' },
+      // Masses spawn aligned to pulleyCenter.x ± 30px, well below the wheel
+      { id: 'massA', type: 'hangingMass', x: 0.5, px: -30, y: 0.15, py: 150, label: 'HangingMassA' },
+      { id: 'massB', type: 'hangingMass', x: 0.5, px:  30, y: 0.15, py: 100, label: 'HangingMassB' }
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'pulleyCenter' }
+    ],
+    svgPreview: 'truss',
+    stats: { bodies: 3, joints: 0, runtime: 'Live' },
+    customUI: 'pulley'
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+   * 4. COLLISION & MOMENTUM LAB
+   * Two spheres on a flat track surface. Forces are applied
+   * inward by the "Collide" button. Energy balance is tracked.
+   * ═══════════════════════════════════════════════════════════ */
+  {
+    id: 'exp-collision',
+    title: 'Collision & Momentum Lab',
+    author: 'System',
+    authorColor: 'primary',
+    category: 'Collisions',
+    difficulty: 'Intermediate',
+    tags: ['elastic', 'inelastic', 'momentum'],
+    description: 'Two spheres of different mass on the ground surface collide. Observe energy transfer, momentum conservation, and heat loss.',
+    bodies: [
+      // Spheres sit exactly on the ground: y=1.0 (ground top) minus their radius
+      { id: 'sphereA', type: 'sphere', x: 0.28, y: 1.0, py: -22, label: 'SphereA', props: { mass: 3, radius: 22, friction: 0.05, frictionStatic: 0.08, frictionAir: 0.01, restitution: 0.85 } },
+      { id: 'sphereB', type: 'sphere', x: 0.72, y: 1.0, py: -35, label: 'SphereB', props: { mass: 8, radius: 35, friction: 0.05, frictionStatic: 0.08, frictionAir: 0.01, restitution: 0.85 } }
+    ],
+    svgPreview: 'collision',
+    stats: { bodies: 2, joints: 0, runtime: 'Live' },
+    customUI: 'collision'
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+   * 5. SPRING / SIMPLE HARMONIC MOTION
+   * Visible wall on the left, a wide floor, and a block
+   * connected by a spring. The block sits on the floor and
+   * the spring drives SHM.
+   * ═══════════════════════════════════════════════════════════ */
+  {
+    id: 'exp-spring',
+    title: 'Spring & Harmonic Motion Lab',
+    author: 'System',
+    authorColor: 'secondary',
+    category: 'Oscillations',
+    difficulty: 'Advanced',
+    tags: ['spring', 'SHM', 'Hookes Law'],
+    description: 'Wall-mounted spring connected to a sliding block. Observe amplitude, frequency, and damping.',
+    bodies: [
+      { id: 'wall',    type: 'wall',  x: 0.08, y: 0.60, label: 'WallMount' },
+      { id: 'surface', type: 'floor', x: 0.5,  y: 0.72, label: 'FrictionSurface' },
+      { id: 'block',   type: 'block', x: 0.30, y: 0.72, py: -40, label: 'AttachedBlock' }
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'wall' },
+      { type: 'freeze', bodyId: 'surface' },
+      { type: 'axis-y', bodyId: 'block' }
+    ],
+    joints: [
+      { type: 'spring', bodyIdA: 'wall', bodyIdB: 'block', offsetA: { x: 10, y: 0 }, offsetB: { x: -25, y: 0 } }
+    ],
+    svgPreview: 'spring',
+    stats: { bodies: 3, joints: 1, runtime: 'Live' },
+    customUI: 'spring'
+  },
+
+  /* ═══════════════════════════════════════════════════════════
+   * 6. INCLINED PLANE & FRICTION
+   * A large static ramp triangle with a block placed near its
+   * top. Gravity pulls the block down the slope; friction
+   * opposes the motion.
+   * ═══════════════════════════════════════════════════════════ */
+  {
+    id: 'exp-incline',
+    title: 'Inclined Plane & Friction',
+    author: 'System',
+    authorColor: 'tertiary',
+    category: 'Mechanics',
+    difficulty: 'Advanced',
+    tags: ['friction', 'slope', 'normal force'],
+    description: 'A large ramp with a sliding block. Explore friction coefficients and force vector decomposition.',
+    bodies: [
+      { id: 'ramp',   type: 'ramp',  x: 0.5,  y: 0.65, label: 'InclinedPlane' },
+      { id: 'slider', type: 'block', x: 0.38, y: 0.35, label: 'SliderBlock' }
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'ramp' }
+    ],
+    svgPreview: 'incline',
+    stats: { bodies: 2, joints: 0, runtime: 'Live' },
+    customUI: 'incline'
+  }
+]
+
+export const CATEGORIES = ['All', ...new Set(EXPERIMENTS.map((e) => e.category))]
+export const DIFFICULTIES = ['All', 'Beginner', 'Intermediate', 'Advanced']
