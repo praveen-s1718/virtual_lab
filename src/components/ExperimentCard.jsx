@@ -98,99 +98,111 @@ const THUMBS = {
 }
 
 const DIFFICULTY_COLORS = {
-  Beginner:     { bg: 'bg-primary/10',   text: 'text-primary',   border: 'border-primary/20'   },
-  Intermediate: { bg: 'bg-secondary/10', text: 'text-secondary', border: 'border-secondary/20' },
-  Advanced:     { bg: 'bg-tertiary/10',  text: 'text-tertiary',  border: 'border-tertiary/20'  },
+  Beginner:     { bg: 'bg-primary/10',   text: 'text-primary',   border: 'border-primary/20',   glow: 'from-primary/20' },
+  Intermediate: { bg: 'bg-secondary/10', text: 'text-secondary', border: 'border-secondary/20', glow: 'from-secondary/20' },
+  Advanced:     { bg: 'bg-tertiary/10',  text: 'text-tertiary',  border: 'border-tertiary/20',  glow: 'from-tertiary/20' },
 }
 
 const AUTHOR_COLORS = {
-  primary:   'bg-primary/20 text-primary border-primary/25',
-  secondary: 'bg-secondary/20 text-secondary border-secondary/25',
-  tertiary:  'bg-tertiary/20 text-tertiary border-tertiary/25',
+  primary:   'text-primary',
+  secondary: 'text-secondary',
+  tertiary:  'text-tertiary',
 }
 
 export default function ExperimentCard({ experiment, onLoad }) {
   const diff = DIFFICULTY_COLORS[experiment.difficulty] ?? DIFFICULTY_COLORS.Beginner
 
   return (
-    <div className="group relative flex flex-col bg-surface-container-high/70 border border-white/[0.07] rounded-xl overflow-hidden hover:border-primary/25 hover:bg-surface-container-high transition-all duration-200 shadow-panel cursor-pointer">
+    <div
+      onClick={() => onLoad(experiment)}
+      className="
+        group relative flex flex-col h-full
+        rounded-[24px] overflow-hidden
+        bg-surface-container-highest/20 backdrop-blur-xl
+        border border-white/5
+        hover:border-primary/30 hover:bg-surface-container-highest/40
+        hover:-translate-y-1 hover:shadow-[0_8px_40px_rgba(47,245,255,0.12)]
+        transition-all duration-500 ease-out cursor-pointer
+      "
+    >
+      {/* ── Background Glow ── */}
+      <div className={`absolute inset-0 bg-gradient-to-b ${diff.glow} to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none`} />
 
       {/* ── Thumbnail ── */}
-      <div className="h-32 bg-surface-container-lowest border-b border-white/[0.05] flex items-center justify-center p-4 relative overflow-hidden">
-        {/* Blueprint grid in thumbnail */}
-        <div className="absolute inset-0 blueprint-grid opacity-40" />
-        <div className="relative w-full h-full">
+      <div className="h-40 flex items-center justify-center p-6 relative overflow-hidden">
+        {/* Subtle grid pattern inside thumbnail */}
+        <div className="absolute inset-0 blueprint-grid opacity-20 pointer-events-none" />
+        
+        <div className="relative w-full h-full transform group-hover:scale-105 transition-transform duration-700 ease-out">
           {THUMBS[experiment.svgPreview] ?? (
             <div className="w-full h-full flex items-center justify-center">
-              <span className="material-symbols-outlined text-outline text-3xl">science</span>
+              <span className="material-symbols-outlined text-outline/50 text-4xl">science</span>
             </div>
           )}
         </div>
+
         {/* Difficulty badge */}
-        <div className={`absolute top-2 right-2 px-1.5 py-0.5 rounded border text-[8px] font-label font-bold uppercase tracking-widest ${diff.bg} ${diff.text} ${diff.border}`}>
+        <div className={`absolute top-4 right-4 px-2 py-1 rounded-full border text-[9px] font-label font-bold uppercase tracking-widest backdrop-blur-md ${diff.bg} ${diff.text} ${diff.border}`}>
           {experiment.difficulty}
         </div>
       </div>
 
       {/* ── Card body ── */}
-      <div className="flex flex-col gap-3 p-4 flex-1">
-
+      <div className="flex flex-col flex-1 px-6 pb-6 pt-2 relative z-10">
+        
         {/* Title + category */}
-        <div>
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-sm font-headline font-bold text-on-surface group-hover:text-primary transition-colors leading-tight">
+        <div className="mb-3">
+          <div className="flex items-start justify-between gap-3 mb-1.5">
+            <h3 className="text-lg font-headline font-semibold text-on-surface group-hover:text-primary transition-colors leading-tight">
               {experiment.title}
             </h3>
-            <span className="shrink-0 text-[8px] font-label text-zinc-600 uppercase tracking-widest mt-0.5">
-              {experiment.category}
-            </span>
           </div>
-          <p className="text-[10px] font-body text-zinc-600 leading-snug line-clamp-2">
+          <p className="text-xs font-body text-on-surface-variant/70 leading-relaxed line-clamp-2">
             {experiment.description}
           </p>
         </div>
 
         {/* Tags */}
-        <div className="flex flex-wrap gap-1">
+        <div className="flex flex-wrap gap-1.5 mb-5">
           {experiment.tags.map((tag) => (
             <span
               key={tag}
-              className="px-1.5 py-0.5 bg-surface-container-lowest rounded text-[8px] font-label text-zinc-600 uppercase tracking-wider border border-outline-variant/10"
+              className="px-2 py-0.5 rounded-md text-[9px] font-label text-zinc-400 uppercase tracking-widest bg-white/5 border border-white/5"
             >
               {tag}
             </span>
           ))}
         </div>
 
-        {/* Stats row */}
-        <div className="flex items-center gap-3 text-[9px] font-label text-zinc-700 uppercase tracking-wider">
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">category</span>
-            {experiment.stats.bodies} bodies
-          </span>
-          <span className="flex items-center gap-1">
-            <span className="material-symbols-outlined text-xs">link</span>
-            {experiment.stats.joints} joints
-          </span>
-          <span className="flex items-center gap-1 ml-auto">
-            <span className="material-symbols-outlined text-xs">schedule</span>
-            {experiment.stats.runtime}
-          </span>
-        </div>
+        {/* Spacer to push footer to bottom */}
+        <div className="mt-auto" />
 
-        {/* Author + Load button */}
-        <div className="flex items-center justify-between pt-1 border-t border-white/[0.04] mt-auto">
-          <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[9px] font-label font-semibold uppercase tracking-wider ${AUTHOR_COLORS[experiment.authorColor]}`}>
-            <span className="material-symbols-outlined text-xs">account_circle</span>
-            {experiment.author}
+        {/* Footer (Author + Stats + Load) */}
+        <div className="flex items-center justify-between pt-4 border-t border-white/10">
+          <div className="flex flex-col gap-1">
+            <div className={`flex items-center gap-1.5 text-[10px] font-label font-medium uppercase tracking-widest ${AUTHOR_COLORS[experiment.authorColor]}`}>
+              <span className="material-symbols-outlined text-[14px]">psychology</span>
+              {experiment.author}
+            </div>
+            <div className="flex items-center gap-2 text-[9px] font-label text-zinc-500 uppercase tracking-wider">
+              <span>{experiment.stats.bodies} bodies</span>
+              <span className="w-0.5 h-0.5 rounded-full bg-zinc-600" />
+              <span>{experiment.stats.joints} joints</span>
+            </div>
           </div>
+
           <button
-            id={`load-${experiment.id}`}
-            onClick={(e) => { e.stopPropagation(); onLoad(experiment) }}
-            className="flex items-center gap-1 px-3 py-1.5 bg-primary/10 hover:bg-primary/20 border border-primary/20 hover:border-primary/40 text-primary rounded-lg text-[10px] font-headline font-bold uppercase tracking-wider transition-all duration-150 active:scale-95"
+            className="
+              flex items-center gap-1.5 px-4 py-2 rounded-full
+              bg-primary/10 text-primary border border-primary/20
+              group-hover:bg-primary group-hover:text-on-primary group-hover:border-primary
+              group-hover:shadow-[0_0_15px_rgba(47,245,255,0.4)]
+              text-[10px] font-headline font-bold uppercase tracking-widest
+              transition-all duration-300
+            "
           >
-            <span className="material-symbols-outlined text-sm">play_arrow</span>
             Load
+            <span className="material-symbols-outlined text-[14px] group-hover:translate-x-0.5 transition-transform">arrow_forward</span>
           </button>
         </div>
       </div>
