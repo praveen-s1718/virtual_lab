@@ -343,7 +343,7 @@ export default function AnalyticsPanel() {
   const [open, setOpen]       = useState(true)
   const [collapsed, setCollapsed] = useState(false)
   const { chartData, topBody } = useEnergyData()
-  const { runState, inspectedEntity } = useSimulationStore()
+  const { runState, inspectedEntity, activeExperimentConfig } = useSimulationStore()
 
   const isLive = runState === 'running' || runState === 'slowmo'
   const activeEntity = inspectedEntity || (topBody ? { type: 'body', entity: topBody } : null)
@@ -355,6 +355,8 @@ export default function AnalyticsPanel() {
     }
   }, [inspectedEntity])
 
+  // Hide this panel when a library experiment is active (Lab Analytics takes over)
+  if (activeExperimentConfig) return null
   if (!open) return null
 
   return (
