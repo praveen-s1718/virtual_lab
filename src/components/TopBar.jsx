@@ -14,7 +14,7 @@ const ICON_BTNS = [
 ]
 
 export default function TopBar() {
-  const { labId, activePage, setActivePage, socketConnected, remoteCollaborators, activeSharedProjectId, closeSharedProject, sharedProjects } = useSimulationStore()
+  const { labId, activePage, setActivePage, socketConnected, remoteCollaborators, activeSharedProjectId, closeSharedProject, sharedProjects, setPendingExperiment } = useSimulationStore()
   const [inviteCopied, setInviteCopied] = useState(false)
 
   const handleInvite = () => {
@@ -39,6 +39,13 @@ export default function TopBar() {
     }
     
     document.body.removeChild(textArea)
+  }
+
+  const handleNavClick = (id) => {
+    setActivePage(id)
+    if (id === 'local-canvas' || id === 'shared-canvas') {
+      setPendingExperiment(null)
+    }
   }
 
   return (
@@ -87,7 +94,7 @@ export default function TopBar() {
             <button
               key={id}
               id={`nav-${id}`}
-              onClick={() => setActivePage(id)}
+              onClick={() => handleNavClick(id)}
               className={`font-headline uppercase tracking-[0.05em] text-xs font-bold transition-all duration-200 ${
                 activePage === id ? 'nav-link-active' : 'nav-link'
               }`}
