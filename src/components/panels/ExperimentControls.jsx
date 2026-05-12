@@ -233,9 +233,9 @@ export default function ExperimentControls() {
     // Apply collision type restitution to both spheres
     useEffect(() => {
       const r = activeType?.restitution ?? 1.0
-      if (sphereA) { sphereA.restitution = r; sphereA.frictionAir = 0.01; sphereA.friction = 0.05 }
-      if (sphereB) { sphereB.restitution = r; sphereB.frictionAir = 0.01; sphereB.friction = 0.05 }
-      if (ground) { ground.friction = 0.05; ground.frictionStatic = 0.065 }
+      if (sphereA) { sphereA.restitution = r; sphereA.frictionAir = 0.001; sphereA.friction = 0.001 }
+      if (sphereB) { sphereB.restitution = r; sphereB.frictionAir = 0.001; sphereB.friction = 0.001 }
+      if (ground) { ground.friction = 0.001; ground.frictionStatic = 0.001 }
     }, [sphereA, sphereB, ground, collisionType])
 
     const isRunning = useSimulationStore(state => state.runState) !== 'idle'

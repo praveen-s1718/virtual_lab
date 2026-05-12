@@ -5,6 +5,7 @@ import useCollaboration from '../hooks/useCollaboration'
 import CollaboratorCursor from './canvas/CollaboratorCursor'
 import useSimulationStore from '../store/simulationStore'
 import { connectSocket, getSocket } from '../services/socket'
+import { getEngine } from '../physics/engineInstance'
 
 /* Assign a colour to a remote user deterministically */
 const COLLAB_COLORS = ['primary', 'secondary', 'tertiary']
@@ -110,6 +111,14 @@ export default function SimulationCanvas({ isShared }) {
               addJoint(jt.type, bA, jt.offsetA || null, posB, bB || null, jt.offsetB || null)
             }
           })
+        }
+        // For collision experiment, remove side walls so spheres fly off-screen after collision
+        if (exp.customUI === 'collision') {
+          const eng = getEngine()
+          if (eng) {
+            const allBodies = Matter.Composite.allBodies(eng.world)
+            allBodies.filter(b => b.label === 'wall').forEach(b => Matter.Composite.remove(eng.world, b))
+          }
         }
       }, 50)
     }
