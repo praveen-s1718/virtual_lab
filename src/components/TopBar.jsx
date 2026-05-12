@@ -87,7 +87,12 @@ export default function TopBar() {
             <button
               key={id}
               id={`nav-${id}`}
-              onClick={() => setActivePage(id)}
+              onClick={() => {
+                setActivePage(id)
+                if (id === 'local-canvas' || id === 'shared-canvas') {
+                  useSimulationStore.getState().setActiveExperimentConfig(null)
+                }
+              }}
               className={`font-headline uppercase tracking-[0.05em] text-xs font-bold transition-all duration-200 ${
                 activePage === id ? 'nav-link-active' : 'nav-link'
               }`}
