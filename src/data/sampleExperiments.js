@@ -98,8 +98,8 @@ export const EXPERIMENTS = [
     tags: ['elastic', 'inelastic', 'momentum'],
     description: 'Two spheres of different mass on the ground surface collide. Observe energy transfer, momentum conservation, and heat loss.',
     bodies: [
-      { id: 'sphereA', type: 'sphere', x: 0.25, y: 0.82, label: 'SphereA', props: { mass: 3, radius: 22, friction: 0.05, frictionAir: 0.01, restitution: 1.0 } },
-      { id: 'sphereB', type: 'sphere', x: 0.75, y: 0.80, label: 'SphereB', props: { mass: 8, radius: 35, friction: 0.05, frictionAir: 0.01, restitution: 1.0 } },
+      { id: 'sphereA', type: 'sphere', x: 0.25, y: 1.0, py: -22, label: 'SphereA', props: { mass: 3, radius: 22, friction: 0.05, frictionAir: 0.01, restitution: 1.0 } },
+      { id: 'sphereB', type: 'sphere', x: 0.75, y: 1.0, py: -35, label: 'SphereB', props: { mass: 8, radius: 35, friction: 0.05, frictionAir: 0.01, restitution: 1.0 } },
     ],
     locks: [],
     joints: [],
