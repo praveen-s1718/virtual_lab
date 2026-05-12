@@ -136,22 +136,20 @@ export const EXPERIMENTS = [
     category: 'Oscillations',
     difficulty: 'Advanced',
     tags: ['spring', 'SHM', 'Hookes Law'],
-    description: 'Wall-mounted spring connected to a sliding block. Observe amplitude, frequency, and damping.',
+    description: 'A block suspended by a spring from a high surface. Observe amplitude, frequency, and harmonic motion.',
     bodies: [
-      { id: 'wall',    type: 'wall',  x: 0.08, y: 0.60, label: 'WallMount' },
-      { id: 'surface', type: 'floor', x: 0.5,  y: 0.72, label: 'FrictionSurface' },
-      { id: 'block',   type: 'block', x: 0.30, y: 0.72, py: -40, label: 'AttachedBlock' }
+      { id: 'ceiling', type: 'roof',  x: 0.5, y: 0.15, label: 'Ceiling' },
+      { id: 'block',   type: 'block', x: 0.5, y: 0.15, py: 150, label: 'OscillatingBlock', props: { mass: 8, frictionAir: 0.002 } }
     ],
     locks: [
-      { type: 'freeze', bodyId: 'wall' },
-      { type: 'freeze', bodyId: 'surface' },
-      { type: 'axis-y', bodyId: 'block' }
+      { type: 'freeze', bodyId: 'ceiling' },
+      { type: 'axis-x', bodyId: 'block' }
     ],
     joints: [
-      { type: 'spring', bodyIdA: 'wall', bodyIdB: 'block', offsetA: { x: 10, y: 0 }, offsetB: { x: -25, y: 0 } }
+      { type: 'spring', bodyIdA: 'ceiling', bodyIdB: 'block', offsetA: { x: 0, y: 20 }, offsetB: { x: 0, y: -29 } }
     ],
     svgPreview: 'spring',
-    stats: { bodies: 3, joints: 1, runtime: 'Live' },
+    stats: { bodies: 2, joints: 1, runtime: 'Live' },
     customUI: 'spring'
   },
 
