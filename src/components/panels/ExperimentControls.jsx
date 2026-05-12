@@ -6,6 +6,7 @@ import Matter from 'matter-js'
 export default function ExperimentControls() {
   const { activeExperimentConfig } = useSimulationStore()
   const [engineUpdateTick, setEngineUpdateTick] = useState(0)
+  const [angleInputText, setAngleInputText] = useState(null)
 
   // Force re-render periodically to stay in sync with the physics engine
   useEffect(() => {
