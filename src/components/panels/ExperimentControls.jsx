@@ -52,28 +52,47 @@ export default function ExperimentControls() {
       <div className="flex flex-col gap-4 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Pendulum Controls</h3>
 
-        <div className="flex items-center justify-between">
-          <label className="text-[10px] text-zinc-400">Initial Angle (°)</label>
-          <input
-            type="number"
-            className="w-16 bg-surface text-[10px] text-on-surface border border-outline-variant rounded px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-50"
-            value={currentAngleDeg}
-            disabled={isRunning}
-            onChange={(e) => {
-              const val = e.target.value
-              if (val === '' || isNaN(val)) return
-              const newAngleDeg = parseInt(val)
-              const newAngleRad = newAngleDeg * (Math.PI / 180)
-              if (bob && beam) {
-                const ropeLen = ropeConstraint ? ropeConstraint.length : 250
-                const newX = beam.position.x + Math.sin(newAngleRad) * ropeLen
-                const newY = beam.position.y + Math.cos(newAngleRad) * ropeLen
-                Matter.Body.setPosition(bob, { x: newX, y: newY })
-                Matter.Body.setVelocity(bob, { x: 0, y: 0 })
-                Matter.Body.setAngularVelocity(bob, 0)
-              }
-            }}
-          />
+        <div className="flex flex-col gap-1">
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-zinc-400">Initial Angle (°)</label>
+            <input
+              type="text"
+              inputMode="numeric"
+              className="w-20 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-2 py-1.5 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
+              value={angleInputText !== null ? angleInputText : currentAngleDeg}
+              disabled={isRunning}
+              onFocus={() => setAngleInputText(String(currentAngleDeg))}
+              onBlur={() => setAngleInputText(null)}
+              onChange={(e) => {
+                const raw = e.target.value
+                setAngleInputText(raw)
+
+                // Allow typing in progress (empty, minus sign, etc.)
+                if (raw === '' || raw === '-') return
+
+                const parsed = parseFloat(raw)
+                if (isNaN(parsed)) return
+
+                // Normalize: wrap into -180..180 range
+                let effective = parsed % 360
+                if (effective > 180) effective -= 360
+                if (effective < -180) effective += 360
+
+                const rad = effective * (Math.PI / 180)
+                if (bob && beam) {
+                  const ropeLen = ropeConstraint ? ropeConstraint.length : 250
+                  const newX = beam.position.x + Math.sin(rad) * ropeLen
+                  const newY = beam.position.y + Math.cos(rad) * ropeLen
+                  Matter.Body.setPosition(bob, { x: newX, y: newY })
+                  Matter.Body.setVelocity(bob, { x: 0, y: 0 })
+                  Matter.Body.setAngularVelocity(bob, 0)
+                }
+              }}
+            />
+          </div>
+          {!isRunning && (
+            <span className="text-[8px] text-zinc-600 italic">Type any angle. Values &gt; 360° are wrapped.</span>
+          )}
         </div>
 
         <label className="text-[10px] text-zinc-400">Rope Length: {currentLength} px</label>
