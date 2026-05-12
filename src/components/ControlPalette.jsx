@@ -250,7 +250,9 @@ export default function ControlPalette() {
   const [minimised, setMinimised] = useState(false)
   const { activeTab, activeExperimentConfig } = useSimulationStore()
 
-  const cfg = TAB_CONFIG[activeTab] ?? TAB_CONFIG.objects
+  const cfg = activeExperimentConfig 
+    ? { title: 'Lab Controls', subtitle: activeExperimentConfig.title, icon: 'science', color: 'text-primary' }
+    : (TAB_CONFIG[activeTab] ?? TAB_CONFIG.objects)
 
   if (minimised) {
     return (
@@ -276,20 +278,25 @@ export default function ControlPalette() {
           <button onClick={() => setMinimised(true)} className="material-symbols-outlined text-zinc-600 hover:text-zinc-300 text-base transition-colors">remove</button>
         </div>
 
-        <div className="flex border-b border-white/[0.04]">
-          {Object.entries(TAB_CONFIG).map(([id, t]) => (
-            <div key={id} className={`flex-1 h-0.5 transition-all duration-300 ${activeTab === id ? t.color.replace('text-', 'bg-') : 'bg-transparent'}`} />
-          ))}
-        </div>
+        {!activeExperimentConfig && (
+          <div className="flex border-b border-white/[0.04]">
+            {Object.entries(TAB_CONFIG).map(([id, t]) => (
+              <div key={id} className={`flex-1 h-0.5 transition-all duration-300 ${activeTab === id ? t.color.replace('text-', 'bg-') : 'bg-transparent'}`} />
+            ))}
+          </div>
+        )}
 
         <div className="overflow-y-auto no-scrollbar max-h-[calc(100vh-240px)]">
-          {activeExperimentConfig && <ExperimentControls />}
-          <div className="p-4">
-            {activeTab === 'objects' && <RigidBodyPicker />}
-            {activeTab === 'joints'  && <JointPicker />}
-            {activeTab === 'locks'   && <LocksPicker />}
-            {activeTab === 'forces'  && <ForcesPicker />}
-          </div>
+          {activeExperimentConfig ? (
+            <ExperimentControls />
+          ) : (
+            <div className="p-4">
+              {activeTab === 'objects' && <RigidBodyPicker />}
+              {activeTab === 'joints'  && <JointPicker />}
+              {activeTab === 'locks'   && <LocksPicker />}
+              {activeTab === 'forces'  && <ForcesPicker />}
+            </div>
+          )}
         </div>
 
         <div className="px-4 py-3 border-t border-white/[0.06] flex gap-2">

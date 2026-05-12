@@ -271,8 +271,8 @@ export default function ExperimentControls() {
 
   /* ──────────────────── SPRING / SHM ──────────────────── */
   const renderSpringControls = () => {
-    const block = bodies.find(b => b.label === 'AttachedBlock')
-    const wallBody = bodies.find(b => b.label === 'WallMount')
+    const block = bodies.find(b => b.label === 'OscillatingBlock')
+    const wallBody = bodies.find(b => b.label === 'Ceiling')
     const constraint = constraints.find(c =>
       (c.bodyA === wallBody && c.bodyB === block) ||
       (c.bodyA === block && c.bodyB === wallBody)
@@ -291,7 +291,7 @@ export default function ExperimentControls() {
           onChange={(e) => { if (constraint) constraint.stiffness = parseFloat(e.target.value) }}
         />
         <label className="text-[10px] text-zinc-400">Block Mass: {currentMass.toFixed(1)} kg</label>
-        <input type="range" min="1" max="50" value={currentMass} onChange={(e) => updateBodyMass('AttachedBlock', parseFloat(e.target.value))} />
+        <input type="range" min="1" max="50" value={currentMass} onChange={(e) => updateBodyMass('OscillatingBlock', parseFloat(e.target.value))} />
 
         <label className="text-[10px] text-zinc-400">Damping (Air Friction): {block ? block.frictionAir.toFixed(3) : '-'}</label>
         <input
@@ -302,10 +302,10 @@ export default function ExperimentControls() {
 
         <button
           onClick={() => {
-            if (block) {
-              // Pull the block 150px to the right from equilibrium and release
-              const eqX = wallBody ? wallBody.position.x + 180 : block.position.x
-              Matter.Body.setPosition(block, { x: eqX + 150, y: block.position.y })
+            if (block && wallBody) {
+              // Pull the block 150px down from equilibrium and release
+              const eqY = wallBody.position.y + 100 // approximate equilibrium
+              Matter.Body.setPosition(block, { x: block.position.x, y: eqY + 150 })
               Matter.Body.setVelocity(block, { x: 0, y: 0 })
             }
           }}
