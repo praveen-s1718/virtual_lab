@@ -11,11 +11,14 @@ import useSimulationStore from './store/simulationStore'
 
 /* ── Simulation page ── */
 function SimulationPage({ isShared }) {
+  const activeExperimentConfig = useSimulationStore(state => state.activeExperimentConfig)
+  const isExperiment = !!activeExperimentConfig
+
   return (
     <>
-      <SideNav />
+      {!isExperiment && <SideNav />}
       <BottomBar />
-      <main className="fixed inset-0 pt-16 pl-20 pb-16 blueprint-grid overflow-hidden">
+      <main className={`fixed inset-0 pt-16 ${isExperiment ? 'pl-0' : 'pl-20'} pb-16 blueprint-grid overflow-hidden`}>
         <div className="relative w-full h-full">
           <SimulationCanvas isShared={isShared} />
           <ControlPalette />

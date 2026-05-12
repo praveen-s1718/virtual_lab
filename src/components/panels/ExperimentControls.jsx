@@ -95,9 +95,9 @@ export default function ExperimentControls() {
           )}
         </div>
 
-        <label className="text-[10px] text-zinc-400">Rope Length: {currentLength} px</label>
+        <label className="text-[10px] text-zinc-400">Rope Length: {(currentLength / 100).toFixed(2)} m</label>
         <input
-          type="range" min="100" max="400" value={currentLength}
+          type="range" min="50" max="500" step="5" value={currentLength}
           onChange={(e) => {
             const newLen = parseInt(e.target.value)
             if (ropeConstraint) ropeConstraint.length = newLen
