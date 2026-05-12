@@ -120,7 +120,7 @@ export default function ExperimentAnalytics() {
           const height = ropeLen - dy
           const ke = 0.5 * bob.mass * v * v
           const pe = bob.mass * 0.001 * height
-          setData(prev => [...prev, { time: t, angle: +theta.toFixed(2), ke: +ke.toFixed(3), pe: +pe.toFixed(3), speed: +v.toFixed(2) }].slice(-200))
+          setData(prev => [...prev, { time: t, angle: +theta.toFixed(2), ke: +ke.toFixed(3), pe: +pe.toFixed(3), speed: +v.toFixed(2) }])
         }
       } else if (activeExperimentConfig.customUI === 'collision') {
         const sA = bodies.find(b => b.label === 'SphereA')
@@ -130,7 +130,7 @@ export default function ExperimentAnalytics() {
           const vB = Matter.Vector.magnitude(sB.velocity)
           const keA = 0.5 * sA.mass * vA * vA
           const keB = 0.5 * sB.mass * vB * vB
-          setData(prev => [...prev, { time: t, keA: +keA.toFixed(3), keB: +keB.toFixed(3), keTotal: +(keA + keB).toFixed(3) }].slice(-200))
+          setData(prev => [...prev, { time: t, keA: +keA.toFixed(3), keB: +keB.toFixed(3), keTotal: +(keA + keB).toFixed(3) }])
         }
       } else if (activeExperimentConfig.customUI === 'spring') {
         const block = bodies.find(b => b.label === 'OscillatingBlock')
@@ -139,21 +139,21 @@ export default function ExperimentAnalytics() {
           const dy = block.position.y - ceiling.position.y
           const v = Matter.Vector.magnitude(block.velocity)
           const ke = 0.5 * block.mass * v * v
-          setData(prev => [...prev, { time: t, y: +dy.toFixed(1), speed: +v.toFixed(2), ke: +ke.toFixed(3) }].slice(-200))
+          setData(prev => [...prev, { time: t, y: +dy.toFixed(1), speed: +v.toFixed(2), ke: +ke.toFixed(3) }])
         }
       } else if (activeExperimentConfig.customUI === 'incline') {
         const slider = bodies.find(b => b.label === 'SliderBlock')
         if (slider) {
           const v = Matter.Vector.magnitude(slider.velocity)
           const ke = 0.5 * slider.mass * v * v
-          setData(prev => [...prev, { time: t, v: +v.toFixed(2), ke: +ke.toFixed(3) }].slice(-200))
+          setData(prev => [...prev, { time: t, v: +v.toFixed(2), ke: +ke.toFixed(3) }])
         }
       } else if (activeExperimentConfig.customUI === 'projectile') {
         const proj = bodies.find(b => b.label === 'Projectile')
         const ground = bodies.find(b => b.label === 'GroundPlane')
         if (proj) {
           const groundY = ground ? ground.position.y : window.innerHeight * 0.88
-          setData(prev => [...prev, { time: t, h: +Math.max(0, groundY - proj.position.y).toFixed(1), d: +proj.position.x.toFixed(1) }].slice(-200))
+          setData(prev => [...prev, { time: t, h: +Math.max(0, groundY - proj.position.y).toFixed(1), d: +proj.position.x.toFixed(1) }])
         }
       } else if (activeExperimentConfig.customUI === 'pulley') {
         const mA = bodies.find(b => b.label === 'HangingMassA')
@@ -163,7 +163,7 @@ export default function ExperimentAnalytics() {
             time: t,
             posA: +mA.position.y.toFixed(1), posB: +mB.position.y.toFixed(1),
             vA: +mA.velocity.y.toFixed(2), vB: +mB.velocity.y.toFixed(2)
-          }].slice(-200))
+          }])
         }
       }
     }, 80)
