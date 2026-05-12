@@ -38,9 +38,42 @@ export default function ExperimentControls() {
     const currentMass = bob ? bob.mass : 5
     const currentDamping = bob ? bob.frictionAir : 0.005
 
+    // Calculate current angle from vertical
+    const dx = bob && beam ? bob.position.x - beam.position.x : 0
+    const dy = bob && beam ? bob.position.y - beam.position.y : 1
+    const currentAngleRad = Math.atan2(dx, dy)
+    const currentAngleDeg = bob && beam ? Math.round(currentAngleRad * (180 / Math.PI)) : 30
+    
+    // We only want to adjust initial angle when idle
+    const isRunning = useSimulationStore(state => state.runState) !== 'idle'
+
     return (
       <div className="flex flex-col gap-4 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Pendulum Controls</h3>
+
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Initial Angle (°)</label>
+          <input
+            type="number"
+            className="w-16 bg-surface text-[10px] text-on-surface border border-outline-variant rounded px-2 py-1 focus:outline-none focus:border-primary disabled:opacity-50"
+            value={currentAngleDeg}
+            disabled={isRunning}
+            onChange={(e) => {
+              const val = e.target.value
+              if (val === '' || isNaN(val)) return
+              const newAngleDeg = parseInt(val)
+              const newAngleRad = newAngleDeg * (Math.PI / 180)
+              if (bob && beam) {
+                const ropeLen = ropeConstraint ? ropeConstraint.length : 250
+                const newX = beam.position.x + Math.sin(newAngleRad) * ropeLen
+                const newY = beam.position.y + Math.cos(newAngleRad) * ropeLen
+                Matter.Body.setPosition(bob, { x: newX, y: newY })
+                Matter.Body.setVelocity(bob, { x: 0, y: 0 })
+                Matter.Body.setAngularVelocity(bob, 0)
+              }
+            }}
+          />
+        </div>
 
         <label className="text-[10px] text-zinc-400">Rope Length: {currentLength} px</label>
         <input
@@ -48,9 +81,11 @@ export default function ExperimentControls() {
           onChange={(e) => {
             const newLen = parseInt(e.target.value)
             if (ropeConstraint) ropeConstraint.length = newLen
-            // Reposition bob to hang vertically at new length
+            // Reposition bob to preserve current angle
             if (bob && beam) {
-              Matter.Body.setPosition(bob, { x: beam.position.x, y: beam.position.y + newLen })
+              const newX = beam.position.x + Math.sin(currentAngleRad) * newLen
+              const newY = beam.position.y + Math.cos(currentAngleRad) * newLen
+              Matter.Body.setPosition(bob, { x: newX, y: newY })
               Matter.Body.setVelocity(bob, { x: 0, y: 0 })
             }
           }}
@@ -67,26 +102,9 @@ export default function ExperimentControls() {
           value={currentDamping}
           onChange={(e) => { if (bob) bob.frictionAir = parseFloat(e.target.value) }}
         />
-        <button
-          onClick={() => {
-            if (bob && beam) {
-              // Pull bob to 30° from vertical and release
-              const ropeLen = ropeConstraint ? ropeConstraint.length : 250
-              const angle = Math.PI / 6 // 30 degrees
-              const newX = beam.position.x - Math.sin(angle) * ropeLen
-              const newY = beam.position.y + Math.cos(angle) * ropeLen
-              Matter.Body.setPosition(bob, { x: newX, y: newY })
-              Matter.Body.setVelocity(bob, { x: 0, y: 0 })
-              Matter.Body.setAngularVelocity(bob, 0)
-            }
-          }}
-          className="py-2 bg-primary/20 text-primary border border-primary/30 rounded font-bold text-xs hover:bg-primary/30"
-        >
-          Reset to 30° Swing
-        </button>
 
         <div className="text-[9px] text-zinc-600 leading-relaxed border-t border-white/5 pt-2">
-          Adjust length and mass, then press <b>RUN ▶</b>. The bob swings from its initial angle. Period T = 2π√(L/g) depends only on rope length, not mass.
+          Adjust the initial angle and rope length, then press <b>RUN ▶</b>. The bob swings from its initial angle. Period T = 2π√(L/g) depends only on rope length, not mass.
         </div>
       </div>
     )
