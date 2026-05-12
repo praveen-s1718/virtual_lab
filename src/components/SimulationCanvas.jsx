@@ -39,7 +39,14 @@ export default function SimulationCanvas({ isShared }) {
   const pendingExperiment = useSimulationStore(state => state.pendingExperiment)
   const setPendingExperiment = useSimulationStore(state => state.setPendingExperiment)
   const loaderFiredRef = useRef(false)
+  const lastPendingRef = useRef(null)
   useEffect(() => {
+    // Reset the guard whenever a NEW pendingExperiment arrives (e.g. on Reset)
+    if (pendingExperiment && pendingExperiment !== lastPendingRef.current) {
+      loaderFiredRef.current = false
+      lastPendingRef.current = pendingExperiment
+    }
+
     if (pendingExperiment && addBody && runState === 'idle') {
       if (loaderFiredRef.current) return
       loaderFiredRef.current = true
@@ -105,9 +112,6 @@ export default function SimulationCanvas({ isShared }) {
           })
         }
       }, 50)
-    } else if (runState !== 'idle') {
-      // Allow the experiment to be re-loaded the next time we return to idle (RESET)
-      loaderFiredRef.current = false
     }
   }, [pendingExperiment, addBody, addLock, addJoint, runState, setPendingExperiment])
 

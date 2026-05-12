@@ -13,11 +13,15 @@ const SECONDARY_ACTIONS = [
 ]
 
 export default function BottomBar() {
-  const { runState, setRunState } = useSimulationStore()
+  const { runState, setRunState, activeExperimentConfig, setPendingExperiment } = useSimulationStore()
 
   const handleAction = (action) => {
     if (action.id === 'reset') {
       setRunState('idle')
+      // If inside a library experiment, re-queue it so it reloads from the template
+      if (activeExperimentConfig) {
+        setPendingExperiment({ ...activeExperimentConfig })
+      }
     } else if (action.id === 'run' && runState === 'running') {
       setRunState('paused')
     } else if (action.id === 'pause') {
