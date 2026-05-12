@@ -1,30 +1,74 @@
-import { useState, useEffect } from 'react'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
+import { useState, useEffect, useMemo } from 'react'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, Legend, ReferenceLine } from 'recharts'
 import useSimulationStore from '../../store/simulationStore'
 import { getEngine } from '../../physics/engineInstance'
 import Matter from 'matter-js'
+
+/* ── Shared chart styling ────────────────────────────────── */
+const GRID_STYLE = { stroke: 'rgba(255,255,255,0.04)' }
+const AXIS_STYLE = { fontSize: 9, fill: '#71717a', fontFamily: 'Inter, sans-serif' }
+const TOOLTIP_STYLE = {
+  backgroundColor: 'rgba(15,15,15,0.95)',
+  border: '1px solid rgba(255,255,255,0.1)',
+  borderRadius: '8px',
+  fontSize: '10px',
+  padding: '8px 12px',
+  boxShadow: '0 8px 32px rgba(0,0,0,0.5)',
+}
+
+function StatCard({ label, value, unit, color, icon }) {
+  return (
+    <div className="flex flex-col gap-0.5 bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 py-2">
+      <div className="flex items-center gap-1.5">
+        {icon && <span className="material-symbols-outlined text-[12px]" style={{ color }}>{icon}</span>}
+        <span className="text-[8px] font-label text-zinc-500 uppercase tracking-widest">{label}</span>
+      </div>
+      <div className="flex items-baseline gap-1">
+        <span className="text-sm font-headline font-bold" style={{ color }}>{value}</span>
+        {unit && <span className="text-[9px] text-zinc-600 font-label">{unit}</span>}
+      </div>
+    </div>
+  )
+}
+
+function ChartSection({ title, color, children, height = 'h-44' }) {
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2">
+        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+        <h4 className="text-[10px] font-headline font-bold uppercase tracking-wider text-zinc-300">{title}</h4>
+      </div>
+      <div className={`${height} bg-white/[0.02] border border-white/[0.05] rounded-lg p-2`}>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+const formatTime = (t, data) => {
+  if (!data || data.length === 0) return ''
+  const start = data[0]?.time || 0
+  return ((t - start) / 1000).toFixed(1) + 's'
+}
 
 export default function ExperimentAnalytics() {
   const { activeExperimentConfig, runState } = useSimulationStore()
   const [data, setData] = useState([])
   const [energySummary, setEnergySummary] = useState(null)
 
-  /* ── Collision event hooks for energy balance ── */
+  /* ── Collision event hooks ── */
   useEffect(() => {
     if (activeExperimentConfig?.customUI !== 'collision') return
     const engine = getEngine()
     if (!engine) return
 
     let keBefore = null
-
     const computeKE = (body) => {
       const v = Matter.Vector.magnitude(body.velocity)
-      const translational = 0.5 * body.mass * (v * v)
-      const rotational = 0.5 * body.inertia * (body.angularVelocity * body.angularVelocity)
-      return translational + rotational
+      return 0.5 * body.mass * v * v + 0.5 * body.inertia * body.angularVelocity ** 2
     }
 
-    const handleCollisionStart = (e) => {
+    const handleStart = (e) => {
       for (const pair of e.pairs) {
         const labels = [pair.bodyA.label, pair.bodyB.label]
         if (labels.includes('SphereA') && labels.includes('SphereB')) {
@@ -32,31 +76,24 @@ export default function ExperimentAnalytics() {
         }
       }
     }
-
-    const handleCollisionEnd = (e) => {
+    const handleEnd = (e) => {
       for (const pair of e.pairs) {
         const labels = [pair.bodyA.label, pair.bodyB.label]
         if (labels.includes('SphereA') && labels.includes('SphereB') && keBefore !== null) {
           setTimeout(() => {
             const keAfter = computeKE(pair.bodyA) + computeKE(pair.bodyB)
-            const heat = keBefore - keAfter
-            setEnergySummary({
-              keBefore,
-              keAfter,
-              heat: Math.max(0, heat)
-            })
+            setEnergySummary({ keBefore, keAfter, heat: Math.max(0, keBefore - keAfter) })
             keBefore = null
           }, 80)
         }
       }
     }
 
-    Matter.Events.on(engine, 'collisionStart', handleCollisionStart)
-    Matter.Events.on(engine, 'collisionEnd', handleCollisionEnd)
-
+    Matter.Events.on(engine, 'collisionStart', handleStart)
+    Matter.Events.on(engine, 'collisionEnd', handleEnd)
     return () => {
-      Matter.Events.off(engine, 'collisionStart', handleCollisionStart)
-      Matter.Events.off(engine, 'collisionEnd', handleCollisionEnd)
+      Matter.Events.off(engine, 'collisionStart', handleStart)
+      Matter.Events.off(engine, 'collisionEnd', handleEnd)
     }
   }, [activeExperimentConfig])
 
@@ -68,7 +105,6 @@ export default function ExperimentAnalytics() {
     const interval = setInterval(() => {
       const engine = getEngine()
       if (!engine) return
-
       const bodies = Matter.Composite.allBodies(engine.world)
       const t = Date.now()
 
@@ -76,273 +112,324 @@ export default function ExperimentAnalytics() {
         const bob = bodies.find(b => b.label === 'PendulumBob')
         const pivot = bodies.find(b => b.label === 'PendulumBeam')
         if (bob && pivot) {
-          // Calculate angle from the vertical line below the pivot
           const dx = bob.position.x - pivot.position.x
           const dy = bob.position.y - pivot.position.y
           const theta = Math.atan2(dx, dy) * (180 / Math.PI)
-
           const v = Matter.Vector.magnitude(bob.velocity)
           const ropeLen = Math.sqrt(dx * dx + dy * dy) || 1
-          const height = ropeLen - dy  // height above lowest point
+          const height = ropeLen - dy
           const ke = 0.5 * bob.mass * v * v
-          const pe = bob.mass * 0.001 * height  // simplified PE
-
-          setData(prev => [...prev, { time: t, angle: theta, ke, pe }].slice(-120))
+          const pe = bob.mass * 0.001 * height
+          setData(prev => [...prev, { time: t, angle: +theta.toFixed(2), ke: +ke.toFixed(3), pe: +pe.toFixed(3), speed: +v.toFixed(2) }].slice(-200))
         }
       } else if (activeExperimentConfig.customUI === 'collision') {
-        const sphereA = bodies.find(b => b.label === 'SphereA')
-        const sphereB = bodies.find(b => b.label === 'SphereB')
-        if (sphereA && sphereB) {
-          const vA = Matter.Vector.magnitude(sphereA.velocity)
-          const vB = Matter.Vector.magnitude(sphereB.velocity)
-          const keA = 0.5 * sphereA.mass * vA * vA + 0.5 * sphereA.inertia * sphereA.angularVelocity ** 2
-          const keB = 0.5 * sphereB.mass * vB * vB + 0.5 * sphereB.inertia * sphereB.angularVelocity ** 2
-          setData(prev => [...prev, { time: t, keA, keB, keTotal: keA + keB }].slice(-120))
+        const sA = bodies.find(b => b.label === 'SphereA')
+        const sB = bodies.find(b => b.label === 'SphereB')
+        if (sA && sB) {
+          const vA = Matter.Vector.magnitude(sA.velocity)
+          const vB = Matter.Vector.magnitude(sB.velocity)
+          const keA = 0.5 * sA.mass * vA * vA
+          const keB = 0.5 * sB.mass * vB * vB
+          setData(prev => [...prev, { time: t, keA: +keA.toFixed(3), keB: +keB.toFixed(3), keTotal: +(keA + keB).toFixed(3) }].slice(-200))
         }
       } else if (activeExperimentConfig.customUI === 'spring') {
-        const block = bodies.find(b => b.label === 'AttachedBlock')
-        const wall = bodies.find(b => b.label === 'WallMount')
-        if (block && wall) {
-          // Displacement from the wall + offset
-          const eqX = wall.position.x + 180
-          const displacement = block.position.x - eqX
+        const block = bodies.find(b => b.label === 'OscillatingBlock')
+        const ceiling = bodies.find(b => b.label === 'Ceiling')
+        if (block && ceiling) {
+          const dy = block.position.y - ceiling.position.y
           const v = Matter.Vector.magnitude(block.velocity)
-          setData(prev => [...prev, { time: t, x: displacement, v }].slice(-120))
+          const ke = 0.5 * block.mass * v * v
+          setData(prev => [...prev, { time: t, y: +dy.toFixed(1), speed: +v.toFixed(2), ke: +ke.toFixed(3) }].slice(-200))
         }
       } else if (activeExperimentConfig.customUI === 'incline') {
         const slider = bodies.find(b => b.label === 'SliderBlock')
         if (slider) {
           const v = Matter.Vector.magnitude(slider.velocity)
           const ke = 0.5 * slider.mass * v * v
-          setData(prev => [...prev, { time: t, v, ke }].slice(-120))
+          setData(prev => [...prev, { time: t, v: +v.toFixed(2), ke: +ke.toFixed(3) }].slice(-200))
         }
       } else if (activeExperimentConfig.customUI === 'projectile') {
         const proj = bodies.find(b => b.label === 'Projectile')
         const ground = bodies.find(b => b.label === 'GroundPlane')
         if (proj) {
           const groundY = ground ? ground.position.y : window.innerHeight * 0.88
-          const h = Math.max(0, groundY - proj.position.y)
-          const d = proj.position.x
-          setData(prev => [...prev, { time: t, h, d }].slice(-120))
+          setData(prev => [...prev, { time: t, h: +Math.max(0, groundY - proj.position.y).toFixed(1), d: +proj.position.x.toFixed(1) }].slice(-200))
         }
       } else if (activeExperimentConfig.customUI === 'pulley') {
-        const massA = bodies.find(b => b.label === 'HangingMassA')
-        const massB = bodies.find(b => b.label === 'HangingMassB')
-        if (massA && massB) {
+        const mA = bodies.find(b => b.label === 'HangingMassA')
+        const mB = bodies.find(b => b.label === 'HangingMassB')
+        if (mA && mB) {
           setData(prev => [...prev, {
             time: t,
-            posA: massA.position.y,
-            posB: massB.position.y,
-            vA: massA.velocity.y,
-            vB: massB.velocity.y
-          }].slice(-120))
+            posA: +mA.position.y.toFixed(1), posB: +mB.position.y.toFixed(1),
+            vA: +mA.velocity.y.toFixed(2), vB: +mB.velocity.y.toFixed(2)
+          }].slice(-200))
         }
       }
-    }, 100)
-
+    }, 80)
     return () => clearInterval(interval)
   }, [activeExperimentConfig, runState])
 
-  // Clear data when experiment changes
-  useEffect(() => {
-    setData([])
-    setEnergySummary(null)
-  }, [activeExperimentConfig])
+  useEffect(() => { setData([]); setEnergySummary(null) }, [activeExperimentConfig])
 
   if (!activeExperimentConfig) return null
 
-  const renderChart = () => {
-    const tooltipStyle = { backgroundColor: '#1c1b1b', border: '1px solid #333', fontSize: '10px' }
+  /* ── Live stats ── */
+  const latest = data.length > 0 ? data[data.length - 1] : null
 
-    switch (activeExperimentConfig.customUI) {
-      case 'pendulum':
-        return (
-          <div className="w-full mt-4 flex flex-col gap-3">
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Angular Displacement (θ°)</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis domain={[-90, 90]} hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="angle" stroke="#2ff5ff" dot={false} strokeWidth={2} isAnimationActive={false} name="θ (deg)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">KE vs PE</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="ke" stroke="#4ade80" dot={false} strokeWidth={1.5} isAnimationActive={false} name="KE" />
-                  <Line type="monotone" dataKey="pe" stroke="#f97316" dot={false} strokeWidth={1.5} isAnimationActive={false} name="PE" />
-                </LineChart>
-              </ResponsiveContainer>
+  const renderPendulum = () => (
+    <div className="flex flex-col gap-4">
+      {/* Live stats */}
+      <div className="grid grid-cols-3 gap-2">
+        <StatCard label="Angle" value={latest?.angle?.toFixed(1) ?? '—'} unit="°" color="#2ff5ff" icon="rotate_right" />
+        <StatCard label="Speed" value={latest?.speed?.toFixed(2) ?? '—'} unit="m/s" color="#4ade80" icon="speed" />
+        <StatCard label="KE" value={latest?.ke?.toFixed(3) ?? '—'} unit="J" color="#fbbf24" icon="bolt" />
+      </div>
+
+      <ChartSection title="Angular Displacement (θ°)" color="#2ff5ff">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} domain={['auto', 'auto']} />
+            <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Line type="monotone" dataKey="angle" stroke="#2ff5ff" dot={false} strokeWidth={2} isAnimationActive={false} name="θ (°)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+
+      <ChartSection title="Energy Conservation (KE vs PE)" color="#4ade80">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: '9px', fontFamily: 'Inter' }} />
+            <Line type="monotone" dataKey="ke" stroke="#4ade80" dot={false} strokeWidth={1.5} isAnimationActive={false} name="Kinetic (KE)" />
+            <Line type="monotone" dataKey="pe" stroke="#f97316" dot={false} strokeWidth={1.5} isAnimationActive={false} name="Potential (PE)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+    </div>
+  )
+
+  const renderCollision = () => (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-3 gap-2">
+        <StatCard label="KE (A)" value={latest?.keA?.toFixed(2) ?? '—'} unit="J" color="#38bdf8" icon="circle" />
+        <StatCard label="KE (B)" value={latest?.keB?.toFixed(2) ?? '—'} unit="J" color="#f97316" icon="circle" />
+        <StatCard label="Total KE" value={latest?.keTotal?.toFixed(2) ?? '—'} unit="J" color="#4ade80" icon="functions" />
+      </div>
+
+      <ChartSection title="Kinetic Energy Over Time" color="#38bdf8">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: '9px', fontFamily: 'Inter' }} />
+            <Line type="monotone" dataKey="keA" stroke="#38bdf8" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere A" />
+            <Line type="monotone" dataKey="keB" stroke="#f97316" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere B" />
+            <Line type="monotone" dataKey="keTotal" stroke="#4ade80" dot={false} strokeWidth={1.5} strokeDasharray="4 2" isAnimationActive={false} name="Total" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+
+      {/* Energy Balance Card */}
+      <div className="bg-gradient-to-br from-[#0c1829] to-[#0a1220] border border-[#1e3a5f]/60 rounded-xl p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <span className="material-symbols-outlined text-sm text-[#38bdf8]">energy_savings_leaf</span>
+          <h4 className="text-[10px] font-headline font-bold uppercase text-[#38bdf8] tracking-widest">Energy Balance</h4>
+        </div>
+        {!energySummary ? (
+          <div className="text-[10px] text-slate-500 text-center py-3 italic">
+            Press RUN to launch the balls and see energy analysis after collision
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {[
+              { label: 'KE Before Collision', value: energySummary.keBefore.toFixed(3), unit: 'J', color: 'text-slate-200' },
+              { label: 'KE After Collision', value: energySummary.keAfter.toFixed(3), unit: 'J', color: 'text-slate-200' },
+              { label: 'Energy Lost (Heat)', value: energySummary.heat.toFixed(3), unit: 'J', color: energySummary.heat > 0.05 ? 'text-orange-400' : 'text-green-400' },
+            ].map(({ label, value, unit, color }) => (
+              <div key={label} className="flex justify-between items-center text-[10px] border-b border-[#1e3a5f]/40 pb-1.5">
+                <span className="text-slate-400">{label}</span>
+                <span className={`font-bold font-headline ${color}`}>{value} {unit}</span>
+              </div>
+            ))}
+            <div className="mt-2 text-[9px] text-center px-2 py-1.5 rounded-lg bg-white/[0.03]">
+              {energySummary.heat < 0.05
+                ? <span className="text-green-400">✅ Nearly elastic — kinetic energy conserved</span>
+                : <span className="text-orange-400">⚡ Inelastic — {((energySummary.heat / energySummary.keBefore) * 100).toFixed(1)}% energy lost as heat</span>}
             </div>
           </div>
-        )
+        )}
+      </div>
+    </div>
+  )
 
-      case 'collision':
-        return (
-          <div className="w-full mt-4 flex flex-col gap-4">
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Kinetic Energy (KE)</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="keA" stroke="#38bdf8" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere A" />
-                  <Line type="monotone" dataKey="keB" stroke="#f97316" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere B" />
-                  <Line type="monotone" dataKey="keTotal" stroke="#4ade80" dot={false} strokeWidth={2} isAnimationActive={false} name="Total" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="bg-[#0c1829] border border-[#1e3a5f] rounded-lg p-3">
-              <h4 className="text-[10px] font-bold uppercase text-[#38bdf8] mb-2 tracking-widest">Energy Balance</h4>
-              {!energySummary ? (
-                <div className="text-[10px] text-slate-500 text-center py-2">
-                  Launch the balls to see energy analysis after collision
-                </div>
-              ) : (
-                <div className="flex flex-col gap-2">
-                  <div className="flex justify-between items-center text-[10px] border-b border-[#1e3a5f] pb-1">
-                    <span className="text-slate-400">KE Before</span>
-                    <span className="font-bold text-slate-200">{energySummary.keBefore.toFixed(3)} J</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] border-b border-[#1e3a5f] pb-1">
-                    <span className="text-slate-400">KE After</span>
-                    <span className="font-bold text-slate-200">{energySummary.keAfter.toFixed(3)} J</span>
-                  </div>
-                  <div className="flex justify-between items-center text-[10px] border-b border-[#1e3a5f] pb-1">
-                    <span className="text-slate-400">Heat Lost (ΔKE)</span>
-                    <span className={`font-bold ${energySummary.heat > 0.05 ? 'text-orange-400' : 'text-green-400'}`}>
-                      {energySummary.heat.toFixed(3)} J
-                    </span>
-                  </div>
-                  <div className="mt-1 text-[9px] text-slate-500 text-center">
-                    {energySummary.heat < 0.05
-                      ? "✅ Nearly elastic — kinetic energy conserved"
-                      : `⚡ Inelastic — ${((energySummary.heat / energySummary.keBefore) * 100).toFixed(1)}% energy lost`}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )
+  const renderSpring = () => (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-3 gap-2">
+        <StatCard label="Displ." value={latest?.y?.toFixed(1) ?? '—'} unit="px" color="#ffb703" icon="swap_vert" />
+        <StatCard label="Speed" value={latest?.speed?.toFixed(2) ?? '—'} unit="m/s" color="#2ff5ff" icon="speed" />
+        <StatCard label="KE" value={latest?.ke?.toFixed(3) ?? '—'} unit="J" color="#4ade80" icon="bolt" />
+      </div>
 
-      case 'spring':
-        return (
-          <div className="w-full mt-4 flex flex-col gap-3">
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Displacement (x) from equilibrium</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="x" stroke="#ffb703" dot={false} strokeWidth={2} isAnimationActive={false} name="x (px)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Speed (|v|)</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="v" stroke="#2ff5ff" dot={false} strokeWidth={1.5} isAnimationActive={false} name="|v|" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )
+      <ChartSection title="Vertical Displacement" color="#ffb703">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Line type="monotone" dataKey="y" stroke="#ffb703" dot={false} strokeWidth={2} isAnimationActive={false} name="y (px)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
 
-      case 'incline':
-        return (
-          <div className="w-full mt-4 flex flex-col gap-3">
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Speed (|v|)</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="v" stroke="#a855f7" dot={false} strokeWidth={2} isAnimationActive={false} name="|v|" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Kinetic Energy</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="ke" stroke="#4ade80" dot={false} strokeWidth={1.5} isAnimationActive={false} name="KE" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )
+      <ChartSection title="Speed Over Time" color="#2ff5ff">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Line type="monotone" dataKey="speed" stroke="#2ff5ff" dot={false} strokeWidth={1.5} isAnimationActive={false} name="|v| (m/s)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+    </div>
+  )
 
-      case 'projectile':
-        return (
-          <div className="h-40 w-full mt-4">
-            <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Height vs Distance</h4>
-            <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={data}>
-                <XAxis dataKey="d" hide />
-                <YAxis dataKey="h" hide />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Line type="monotone" dataKey="h" stroke="#ff0055" dot={false} strokeWidth={2} isAnimationActive={false} name="Height" />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
-        )
+  const renderIncline = () => (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2">
+        <StatCard label="Speed" value={latest?.v?.toFixed(2) ?? '—'} unit="m/s" color="#a855f7" icon="speed" />
+        <StatCard label="KE" value={latest?.ke?.toFixed(3) ?? '—'} unit="J" color="#4ade80" icon="bolt" />
+      </div>
 
-      case 'pulley':
-        return (
-          <div className="w-full mt-4 flex flex-col gap-3">
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Position Y</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="posA" stroke="#2ff5ff" dot={false} strokeWidth={2} isAnimationActive={false} name="Mass A" />
-                  <Line type="monotone" dataKey="posB" stroke="#f43f5e" dot={false} strokeWidth={2} isAnimationActive={false} name="Mass B" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="h-36">
-              <h4 className="text-[10px] font-bold uppercase text-zinc-400 mb-2">Velocity Y</h4>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={data}>
-                  <XAxis dataKey="time" hide />
-                  <YAxis hide />
-                  <Tooltip contentStyle={tooltipStyle} />
-                  <Line type="monotone" dataKey="vA" stroke="#2ff5ff" dot={false} strokeWidth={1.5} isAnimationActive={false} name="Mass A (v)" />
-                  <Line type="monotone" dataKey="vB" stroke="#f43f5e" dot={false} strokeWidth={1.5} isAnimationActive={false} name="Mass B (v)" />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        )
+      <ChartSection title="Speed vs Time" color="#a855f7">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Line type="monotone" dataKey="v" stroke="#a855f7" dot={false} strokeWidth={2} isAnimationActive={false} name="|v| (m/s)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
 
-      default:
-        return null
-    }
+      <ChartSection title="Kinetic Energy" color="#4ade80">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Line type="monotone" dataKey="ke" stroke="#4ade80" dot={false} strokeWidth={1.5} isAnimationActive={false} name="KE (J)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+    </div>
+  )
+
+  const renderProjectile = () => (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2">
+        <StatCard label="Height" value={latest?.h?.toFixed(1) ?? '—'} unit="px" color="#ff0055" icon="height" />
+        <StatCard label="Distance" value={latest?.d?.toFixed(1) ?? '—'} unit="px" color="#38bdf8" icon="straighten" />
+      </div>
+
+      <ChartSection title="Trajectory (Height vs Distance)" color="#ff0055">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="d" tick={AXIS_STYLE} tickLine={false} axisLine={false} label={{ value: 'Distance', position: 'insideBottom', offset: -2, style: { ...AXIS_STYLE, fontSize: 8 } }} />
+            <YAxis dataKey="h" tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} />
+            <Line type="monotone" dataKey="h" stroke="#ff0055" dot={false} strokeWidth={2} isAnimationActive={false} name="Height" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+    </div>
+  )
+
+  const renderPulley = () => (
+    <div className="flex flex-col gap-4">
+      <div className="grid grid-cols-2 gap-2">
+        <StatCard label="Mass A (Y)" value={latest?.posA?.toFixed(1) ?? '—'} unit="px" color="#2ff5ff" icon="arrow_downward" />
+        <StatCard label="Mass B (Y)" value={latest?.posB?.toFixed(1) ?? '—'} unit="px" color="#f43f5e" icon="arrow_downward" />
+      </div>
+
+      <ChartSection title="Position (Y) Over Time" color="#2ff5ff">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: '9px', fontFamily: 'Inter' }} />
+            <Line type="monotone" dataKey="posA" stroke="#2ff5ff" dot={false} strokeWidth={2} isAnimationActive={false} name="Mass A" />
+            <Line type="monotone" dataKey="posB" stroke="#f43f5e" dot={false} strokeWidth={2} isAnimationActive={false} name="Mass B" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+
+      <ChartSection title="Velocity (Y) Over Time" color="#a855f7">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: '9px', fontFamily: 'Inter' }} />
+            <Line type="monotone" dataKey="vA" stroke="#2ff5ff" dot={false} strokeWidth={1.5} isAnimationActive={false} name="Mass A (v)" />
+            <Line type="monotone" dataKey="vB" stroke="#f43f5e" dot={false} strokeWidth={1.5} isAnimationActive={false} name="Mass B (v)" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+    </div>
+  )
+
+  const charts = {
+    pendulum: renderPendulum,
+    collision: renderCollision,
+    spring: renderSpring,
+    incline: renderIncline,
+    projectile: renderProjectile,
+    pulley: renderPulley,
   }
 
+  const renderer = charts[activeExperimentConfig.customUI]
+  if (!renderer) return null
+
   return (
-    <div className="p-4 bg-surface-container/50 border-t border-outline-variant/20">
-      <h3 className="text-sm font-headline font-bold text-on-surface">Lab Analytics</h3>
-      {renderChart()}
+    <div className="mt-3 bg-surface-container-highest/60 backdrop-blur-md border border-white/[0.07] rounded-xl shadow-panel overflow-hidden">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="material-symbols-outlined text-sm text-primary">monitoring</span>
+          <h3 className="text-[11px] font-headline font-bold text-on-surface uppercase tracking-widest">Lab Analytics</h3>
+          {(runState === 'running' || runState === 'slowmo') && (
+            <span className="flex items-center gap-1 ml-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+              <span className="text-[8px] font-label text-green-400/70 uppercase tracking-widest">Recording</span>
+            </span>
+          )}
+        </div>
+        <span className="text-[9px] font-label text-zinc-600">{data.length} pts</span>
+      </div>
+
+      {/* Charts */}
+      <div className="p-4 flex flex-col gap-4 max-h-[600px] overflow-y-auto no-scrollbar">
+        {renderer()}
+      </div>
     </div>
   )
 }
