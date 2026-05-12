@@ -23,17 +23,13 @@ export const EXPERIMENTS = [
     tags: ['gravity', 'periodic', 'swing'],
     description: 'A classic simple pendulum demonstrating periodic motion, gravitational potential energy, and conservation principles.',
     bodies: [
-      // Roof beam at the top center — the pivot mounts to this
-      { id: 'beam', type: 'roof', x: 0.5, y: 0.08, label: 'PendulumBeam' },
-      // Bob placed at 30° from vertical: dx = L*sin(30°), dy = L*cos(30°) with L≈250px
-      // sin30=0.5 → dx=-125, cos30=0.866 → dy=217
-      { id: 'bob', type: 'sphere', x: 0.5, px: -125, y: 0.08, py: 237, label: 'PendulumBob', props: { mass: 5, radius: 20, frictionAir: 0.005 } },
+      { id: 'beam', type: 'roof', x: 0.5, y: 0.15, label: 'PendulumBeam' },
+      { id: 'bob', type: 'sphere', x: 0.5, px: -125, y: 0.15, py: 216.5, label: 'PendulumBob', props: { mass: 5, radius: 20, frictionAir: 0.005 } },
     ],
     locks: [
       { type: 'freeze', bodyId: 'beam' }
     ],
     joints: [
-      // Rope joint: connects beam center to bob with the actual rope length preserved
       { type: 'rope', bodyIdA: 'beam', bodyIdB: 'bob' }
     ],
     svgPreview: 'pendulum',
@@ -56,14 +52,9 @@ export const EXPERIMENTS = [
     difficulty: 'Intermediate',
     tags: ['trajectory', 'velocity', 'parabola'],
     description: 'Analyze parabolic trajectories under gravitational influence. Adjust launch angle and initial velocity.',
-    bodies: [
-      { id: 'cannon', type: 'cannon', x: 0.08, y: 0.75, label: 'Launcher' },
-      { id: 'ground', type: 'floor',  x: 0.5,  y: 0.88, label: 'GroundPlane' }
-    ],
-    locks: [
-      { type: 'freeze', bodyId: 'cannon' },
-      { type: 'freeze', bodyId: 'ground' }
-    ],
+    bodies: [],
+    locks: [],
+    joints: [],
     svgPreview: 'projectile',
     stats: { bodies: 2, joints: 0, runtime: 'Live' },
     customUI: 'projectile'
@@ -84,15 +75,9 @@ export const EXPERIMENTS = [
     difficulty: 'Intermediate',
     tags: ['tension', 'mass', 'acceleration'],
     description: 'Two hanging masses connected by a rope over a fixed pulley (Atwood machine). Measure tension and acceleration.',
-    bodies: [
-      { id: 'pulleyCenter', type: 'pulleyWheel', x: 0.5, y: 0.15, label: 'PulleyWheel' },
-      // Masses spawn aligned to pulleyCenter.x ± 30px, well below the wheel
-      { id: 'massA', type: 'hangingMass', x: 0.5, px: -30, y: 0.15, py: 150, label: 'HangingMassA' },
-      { id: 'massB', type: 'hangingMass', x: 0.5, px:  30, y: 0.15, py: 100, label: 'HangingMassB' }
-    ],
-    locks: [
-      { type: 'freeze', bodyId: 'pulleyCenter' }
-    ],
+    bodies: [],
+    locks: [],
+    joints: [],
     svgPreview: 'truss',
     stats: { bodies: 3, joints: 0, runtime: 'Live' },
     customUI: 'pulley'
@@ -113,10 +98,11 @@ export const EXPERIMENTS = [
     tags: ['elastic', 'inelastic', 'momentum'],
     description: 'Two spheres of different mass on the ground surface collide. Observe energy transfer, momentum conservation, and heat loss.',
     bodies: [
-      // Spheres sit exactly on the ground: y=1.0 (ground top) minus their radius
-      { id: 'sphereA', type: 'sphere', x: 0.28, y: 1.0, py: -22, label: 'SphereA', props: { mass: 3, radius: 22, friction: 0.05, frictionStatic: 0.08, frictionAir: 0.01, restitution: 0.85 } },
-      { id: 'sphereB', type: 'sphere', x: 0.72, y: 1.0, py: -35, label: 'SphereB', props: { mass: 8, radius: 35, friction: 0.05, frictionStatic: 0.08, frictionAir: 0.01, restitution: 0.85 } }
+      { id: 'sphereA', type: 'sphere', x: 0.25, y: 0.82, label: 'SphereA', props: { mass: 3, radius: 22, friction: 0.05, frictionAir: 0.01, restitution: 1.0 } },
+      { id: 'sphereB', type: 'sphere', x: 0.75, y: 0.80, label: 'SphereB', props: { mass: 8, radius: 35, friction: 0.05, frictionAir: 0.01, restitution: 1.0 } },
     ],
+    locks: [],
+    joints: [],
     svgPreview: 'collision',
     stats: { bodies: 2, joints: 0, runtime: 'Live' },
     customUI: 'collision'
@@ -168,13 +154,9 @@ export const EXPERIMENTS = [
     difficulty: 'Advanced',
     tags: ['friction', 'slope', 'normal force'],
     description: 'A large ramp with a sliding block. Explore friction coefficients and force vector decomposition.',
-    bodies: [
-      { id: 'ramp',   type: 'ramp',  x: 0.5,  y: 0.65, label: 'InclinedPlane' },
-      { id: 'slider', type: 'block', x: 0.38, y: 0.35, label: 'SliderBlock' }
-    ],
-    locks: [
-      { type: 'freeze', bodyId: 'ramp' }
-    ],
+    bodies: [],
+    locks: [],
+    joints: [],
     svgPreview: 'incline',
     stats: { bodies: 2, joints: 0, runtime: 'Live' },
     customUI: 'incline'

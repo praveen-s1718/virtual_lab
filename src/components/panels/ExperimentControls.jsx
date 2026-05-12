@@ -214,9 +214,15 @@ export default function ExperimentControls() {
     const ground = bodies.find(b => b.label === 'ground')
     const [speedA, setSpeedA] = useState(8)
     const [speedB, setSpeedB] = useState(6)
-    const [airDrag, setAirDrag] = useState(0.01)
-    const [surfaceFriction, setSurfaceFriction] = useState(0.05)
-    const [restitution, setRestitution] = useState(0.85)
+    const [collisionType, setCollisionType] = useState('elastic')
+
+    const COLLISION_TYPES = [
+      { id: 'elastic', label: 'Perfectly Elastic', restitution: 1.0, color: 'text-green-400', desc: 'KE fully conserved (e=1)' },
+      { id: 'partial', label: 'Partially Inelastic', restitution: 0.5, color: 'text-yellow-400', desc: 'Some KE lost as heat (e=0.5)' },
+      { id: 'inelastic', label: 'Perfectly Inelastic', restitution: 0.0, color: 'text-red-400', desc: 'Max KE lost, objects stick (e=0)' },
+    ]
+
+    const activeType = COLLISION_TYPES.find(t => t.id === collisionType)
 
     // Store _pushSpeed on bodies so physics engine can read them on RUN
     useEffect(() => {
@@ -224,84 +230,66 @@ export default function ExperimentControls() {
       if (sphereB) sphereB._pushSpeed = -speedB  // negative = leftward
     }, [sphereA, sphereB, speedA, speedB])
 
-    // Apply physics params dynamically to both spheres AND the ground
+    // Apply collision type restitution to both spheres
     useEffect(() => {
-      if (sphereA) {
-        sphereA.frictionAir = airDrag
-        sphereA.friction = surfaceFriction
-        sphereA.frictionStatic = surfaceFriction * 1.3
-        sphereA.restitution = restitution
-      }
-      if (sphereB) {
-        sphereB.frictionAir = airDrag
-        sphereB.friction = surfaceFriction
-        sphereB.frictionStatic = surfaceFriction * 1.3
-        sphereB.restitution = restitution
-      }
-      if (ground) {
-        ground.friction = surfaceFriction
-        ground.frictionStatic = surfaceFriction * 1.3
-      }
-    }, [sphereA, sphereB, ground, airDrag, surfaceFriction, restitution])
+      const r = activeType?.restitution ?? 1.0
+      if (sphereA) { sphereA.restitution = r; sphereA.frictionAir = 0.01; sphereA.friction = 0.05 }
+      if (sphereB) { sphereB.restitution = r; sphereB.frictionAir = 0.01; sphereB.friction = 0.05 }
+      if (ground) { ground.friction = 0.05; ground.frictionStatic = 0.065 }
+    }, [sphereA, sphereB, ground, collisionType])
 
-    const radiusA = sphereA?.circleRadius || 22
-    const radiusB = sphereB?.circleRadius || 35
-    const groundTopY = ground ? ground.position.y - 25 : window.innerHeight
+    const isRunning = useSimulationStore(state => state.runState) !== 'idle'
 
     return (
       <div className="flex flex-col gap-3 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-primary">Collision Controls</h3>
 
+        {/* ── Collision Type Selector ── */}
+        <div className="flex flex-col gap-1.5">
+          <span className="text-[9px] font-label text-zinc-500 uppercase tracking-widest">Collision Type</span>
+          <div className="flex flex-col gap-1">
+            {COLLISION_TYPES.map(type => (
+              <button
+                key={type.id}
+                disabled={isRunning}
+                onClick={() => setCollisionType(type.id)}
+                className={`flex items-center gap-2 px-3 py-2 rounded-lg text-left transition-all border text-[10px] font-bold disabled:opacity-50 ${
+                  collisionType === type.id
+                    ? `${type.color} bg-white/[0.06] border-current/30`
+                    : 'text-zinc-500 border-white/[0.05] hover:border-white/10 hover:bg-white/[0.03]'
+                }`}
+              >
+                <span className={`w-2 h-2 rounded-full ${collisionType === type.id ? 'bg-current' : 'bg-zinc-700'}`} />
+                {type.label}
+              </button>
+            ))}
+          </div>
+          {activeType && (
+            <span className={`text-[8px] italic ${activeType.color} opacity-70`}>{activeType.desc}</span>
+          )}
+        </div>
+
         {/* ── Sphere A ── */}
         <div className="bg-[#0c1929] border border-[#1e3a5f] rounded-lg p-2.5">
-          <div className="text-[10px] font-bold text-[#38bdf8] uppercase tracking-widest mb-2">Sphere A (r={radiusA}px)</div>
+          <div className="text-[10px] font-bold text-[#38bdf8] uppercase tracking-widest mb-2">Sphere A</div>
           <label className="text-[10px] text-zinc-400">Mass: {sphereA ? sphereA.mass.toFixed(1) : '-'} kg</label>
-          <input type="range" min="1" max="30" step="0.5" value={sphereA ? sphereA.mass : 3} onChange={(e) => updateBodyMass('SphereA', parseFloat(e.target.value))} />
+          <input type="range" min="1" max="30" step="0.5" value={sphereA ? sphereA.mass : 3} disabled={isRunning} onChange={(e) => updateBodyMass('SphereA', parseFloat(e.target.value))} />
           <label className="text-[10px] text-zinc-400">Initial Speed → : {speedA} m/s</label>
-          <input type="range" min="1" max="20" value={speedA} onChange={(e) => setSpeedA(parseInt(e.target.value))} />
+          <input type="range" min="1" max="20" value={speedA} disabled={isRunning} onChange={(e) => setSpeedA(parseInt(e.target.value))} />
         </div>
 
         {/* ── Sphere B ── */}
         <div className="bg-[#1a0f0a] border border-[#5f3a1e] rounded-lg p-2.5">
-          <div className="text-[10px] font-bold text-[#f97316] uppercase tracking-widest mb-2">Sphere B (r={radiusB}px)</div>
+          <div className="text-[10px] font-bold text-[#f97316] uppercase tracking-widest mb-2">Sphere B</div>
           <label className="text-[10px] text-zinc-400">Mass: {sphereB ? sphereB.mass.toFixed(1) : '-'} kg</label>
-          <input type="range" min="1" max="50" step="0.5" value={sphereB ? sphereB.mass : 8} onChange={(e) => updateBodyMass('SphereB', parseFloat(e.target.value))} />
+          <input type="range" min="1" max="50" step="0.5" value={sphereB ? sphereB.mass : 8} disabled={isRunning} onChange={(e) => updateBodyMass('SphereB', parseFloat(e.target.value))} />
           <label className="text-[10px] text-zinc-400">Initial Speed ← : {speedB} m/s</label>
-          <input type="range" min="1" max="20" value={speedB} onChange={(e) => setSpeedB(parseInt(e.target.value))} />
+          <input type="range" min="1" max="20" value={speedB} disabled={isRunning} onChange={(e) => setSpeedB(parseInt(e.target.value))} />
         </div>
-
-        {/* ── Shared Physics ── */}
-        <div className="border-t border-white/10 pt-3">
-          <label className="text-[10px] text-zinc-400">Surface Friction (μ): {surfaceFriction.toFixed(2)}</label>
-          <input type="range" min="0" max="1" step="0.05" value={surfaceFriction} onChange={(e) => setSurfaceFriction(parseFloat(e.target.value))} />
-        </div>
-
-        <div>
-          <label className="text-[10px] text-zinc-400">Air Drag: {airDrag.toFixed(3)}</label>
-          <input type="range" min="0" max="0.1" step="0.005" value={airDrag} onChange={(e) => setAirDrag(parseFloat(e.target.value))} />
-        </div>
-
-        <div>
-          <label className="text-[10px] text-zinc-400">Restitution (e): {restitution.toFixed(2)}</label>
-          <input type="range" min="0" max="1" step="0.05" value={restitution} onChange={(e) => setRestitution(parseFloat(e.target.value))} />
-          <div className="text-[9px] text-zinc-600 mt-0.5">
-            {restitution >= 0.95 ? '🟢 Elastic' : restitution >= 0.5 ? '🟡 Partially inelastic' : '🔴 Highly inelastic'}
-          </div>
-        </div>
-
-        {/* ── Reset only ── */}
-        <button
-          onClick={() => {
-            if (sphereA) { Matter.Body.setPosition(sphereA, { x: window.innerWidth * 0.28, y: groundTopY - radiusA }); Matter.Body.setVelocity(sphereA, { x: 0, y: 0 }); Matter.Body.setAngularVelocity(sphereA, 0) }
-            if (sphereB) { Matter.Body.setPosition(sphereB, { x: window.innerWidth * 0.72, y: groundTopY - radiusB }); Matter.Body.setVelocity(sphereB, { x: 0, y: 0 }); Matter.Body.setAngularVelocity(sphereB, 0) }
-          }}
-          className="py-2 border border-outline-variant text-zinc-400 rounded font-bold text-xs hover:bg-white/5"
-        >
-          Reset Positions
-        </button>
 
         <div className="text-[9px] text-zinc-600 leading-relaxed border-t border-white/5 pt-2">
-          Configure mass, speed and friction, then press <b>RUN ▶</b>. Both spheres launch toward each other, collide, and redistribute energy based on <b>restitution (e)</b>. They decelerate via surface friction.
+          Choose collision type, set mass & speed, then press <b>RUN ▶</b>.<br/>
+          <b>Elastic:</b> KE conserved. <b>Inelastic:</b> objects stick together. Momentum is <em>always</em> conserved: m₁v₁ + m₂v₂ = const.
         </div>
       </div>
     )
