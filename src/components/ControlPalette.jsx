@@ -8,6 +8,7 @@ const BODIES = [
   { type: 'sphere',   icon: 'circle',           label: 'Sphere',  color: 'text-secondary', desc: 'r=30 px • ρ=1'  },
   { type: 'pentagon', icon: 'pentagon',         label: 'Poly',    color: 'text-tertiary',  desc: '5-sided • ρ=1'  },
   { type: 'wedge',    icon: 'change_history',   label: 'Wedge',   color: 'text-error',     desc: 'Right Triangle' },
+  { type: 'pulleyWheel', icon: 'trip_origin',   label: 'Pulley',  color: 'text-tertiary',  desc: 'Static Wheel'   },
   { type: 'block',    icon: 'crop_square',      label: 'Heavy',   color: 'text-primary',   desc: '60×60 px • ρ=4' },
 ]
 
@@ -248,9 +249,9 @@ const TAB_CONFIG = {
 
 export default function ControlPalette() {
   const [minimised, setMinimised] = useState(false)
-  const { activeTab, activeExperimentConfig } = useSimulationStore()
+  const { activeTab, activeExperimentConfig, activePage } = useSimulationStore()
 
-  const cfg = activeExperimentConfig 
+  const cfg = (activeExperimentConfig && activePage === 'project')
     ? { title: 'Lab Controls', subtitle: activeExperimentConfig.title, icon: 'science', color: 'text-primary' }
     : (TAB_CONFIG[activeTab] ?? TAB_CONFIG.objects)
 
@@ -278,7 +279,7 @@ export default function ControlPalette() {
           <button onClick={() => setMinimised(true)} className="material-symbols-outlined text-zinc-600 hover:text-zinc-300 text-base transition-colors">remove</button>
         </div>
 
-        {!activeExperimentConfig && (
+        {activePage !== 'project' && (
           <div className="flex border-b border-white/[0.04]">
             {Object.entries(TAB_CONFIG).map(([id, t]) => (
               <div key={id} className={`flex-1 h-0.5 transition-all duration-300 ${activeTab === id ? t.color.replace('text-', 'bg-') : 'bg-transparent'}`} />
@@ -287,7 +288,7 @@ export default function ControlPalette() {
         )}
 
         <div className="overflow-y-auto no-scrollbar max-h-[calc(100vh-240px)]">
-          {activeExperimentConfig ? (
+          {activePage === 'project' ? (
             <ExperimentControls />
           ) : (
             <div className="p-4">

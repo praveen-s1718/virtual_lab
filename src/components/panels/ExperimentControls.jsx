@@ -95,33 +95,48 @@ export default function ExperimentControls() {
           )}
         </div>
 
-        <label className="text-[10px] text-zinc-400">Rope Length: {(currentLength / 100).toFixed(2)} m</label>
-        <input
-          type="range" min="50" max="500" step="5" value={currentLength}
-          onChange={(e) => {
-            const newLen = parseInt(e.target.value)
-            if (ropeConstraint) ropeConstraint.length = newLen
-            // Reposition bob to preserve current angle
-            if (bob && beam) {
-              const newX = beam.position.x + Math.sin(currentAngleRad) * newLen
-              const newY = beam.position.y + Math.cos(currentAngleRad) * newLen
-              Matter.Body.setPosition(bob, { x: newX, y: newY })
-              Matter.Body.setVelocity(bob, { x: 0, y: 0 })
-            }
-          }}
-        />
-        <label className="text-[10px] text-zinc-400">Bob Mass: {currentMass.toFixed(1)} kg</label>
-        <input
-          type="range" min="1" max="50"
-          value={currentMass}
-          onChange={(e) => updateBodyMass('PendulumBob', parseFloat(e.target.value))}
-        />
-        <label className="text-[10px] text-zinc-400">Air Resistance: {currentDamping.toFixed(3)}</label>
-        <input
-          type="range" min="0" max="0.1" step="0.005"
-          value={currentDamping}
-          onChange={(e) => { if (bob) bob.frictionAir = parseFloat(e.target.value) }}
-        />
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Rope Length (m)</label>
+          <input
+            type="number" step="0.05" min="0.5" max="5.0"
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            value={currentLength ? Number((currentLength / 100).toFixed(2)) : 2.5}
+            disabled={isRunning}
+            onChange={(e) => {
+              const parsed = parseFloat(e.target.value)
+              if (isNaN(parsed)) return
+              const newLen = Math.max(50, Math.min(500, Math.round(parsed * 100)))
+              if (ropeConstraint) ropeConstraint.length = newLen
+              // Reposition bob to preserve current angle
+              if (bob && beam) {
+                const newX = beam.position.x + Math.sin(currentAngleRad) * newLen
+                const newY = beam.position.y + Math.cos(currentAngleRad) * newLen
+                Matter.Body.setPosition(bob, { x: newX, y: newY })
+                Matter.Body.setVelocity(bob, { x: 0, y: 0 })
+              }
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Bob Mass (kg)</label>
+          <input
+            type="number" step="0.5" min="1" max="50"
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            value={Number(currentMass.toFixed(1))}
+            disabled={isRunning}
+            onChange={(e) => updateBodyMass('PendulumBob', parseFloat(e.target.value) || 1)}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Air Resistance</label>
+          <input
+            type="number" step="0.005" min="0" max="0.1"
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-primary disabled:opacity-40 disabled:cursor-not-allowed"
+            value={Number(currentDamping.toFixed(3))}
+            disabled={isRunning}
+            onChange={(e) => { if (bob) bob.frictionAir = parseFloat(e.target.value) || 0 }}
+          />
+        </div>
 
         <div className="text-[9px] text-zinc-600 leading-relaxed border-t border-white/5 pt-2">
           Adjust the initial angle and rope length, then press <b>RUN ▶</b>. The bob swings from its initial angle. Period T = 2π√(L/g) depends only on rope length, not mass.
@@ -158,17 +173,22 @@ export default function ExperimentControls() {
     return (
       <div className="flex flex-col gap-4 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-secondary">Projectile Controls</h3>
-        <label className="text-[10px] text-zinc-400">Launch Angle: {angle}°</label>
-        <input
-          type="range" min="5" max="85" value={angle}
-          onChange={(e) => {
-            const a = parseInt(e.target.value)
-            setAngle(a)
-            if (cannon) Matter.Body.setAngle(cannon, -a * (Math.PI / 180))
-          }}
-        />
-        <label className="text-[10px] text-zinc-400">Initial Speed: {speed} m/s</label>
-        <input type="range" min="5" max="50" value={speed} onChange={(e) => setSpeed(parseInt(e.target.value))} />
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Launch Angle (°)</label>
+          <input
+            type="number" min="5" max="85" value={angle}
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-secondary"
+            onChange={(e) => {
+              const a = parseInt(e.target.value) || 5
+              setAngle(a)
+              if (cannon) Matter.Body.setAngle(cannon, -a * (Math.PI / 180))
+            }}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Initial Speed (m/s)</label>
+          <input type="number" min="5" max="50" value={speed} className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-secondary" onChange={(e) => setSpeed(parseInt(e.target.value) || 5)} />
+        </div>
         <button onClick={handleFire} className="py-2 bg-secondary text-on-secondary rounded font-bold text-xs">
           🚀 FIRE
         </button>
@@ -195,10 +215,14 @@ export default function ExperimentControls() {
     return (
       <div className="flex flex-col gap-4 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-tertiary">Pulley Controls</h3>
-        <label className="text-[10px] text-zinc-400">Mass A: {massA ? massA.mass.toFixed(1) : '-'} kg</label>
-        <input type="range" min="1" max="80" step="1" value={massA ? massA.mass : 10} onChange={(e) => updateBodyMass('HangingMassA', parseFloat(e.target.value))} />
-        <label className="text-[10px] text-zinc-400">Mass B: {massB ? massB.mass.toFixed(1) : '-'} kg</label>
-        <input type="range" min="1" max="80" step="1" value={massB ? massB.mass : 10} onChange={(e) => updateBodyMass('HangingMassB', parseFloat(e.target.value))} />
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Mass A (kg)</label>
+          <input type="number" min="1" max="80" step="1" className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-tertiary" value={massA ? Number(massA.mass.toFixed(1)) : 10} onChange={(e) => updateBodyMass('HangingMassA', parseFloat(e.target.value) || 1)} />
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Mass B (kg)</label>
+          <input type="number" min="1" max="80" step="1" className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-tertiary" value={massB ? Number(massB.mass.toFixed(1)) : 10} onChange={(e) => updateBodyMass('HangingMassB', parseFloat(e.target.value) || 1)} />
+        </div>
         <div className="text-[9px] text-zinc-600 mt-1 leading-relaxed">
           Make masses unequal and press RUN. The heavier side accelerates downward.
           <br/>a = g(m₂ − m₁) / (m₁ + m₂)
@@ -212,8 +236,8 @@ export default function ExperimentControls() {
     const sphereA = bodies.find(b => b.label === 'SphereA')
     const sphereB = bodies.find(b => b.label === 'SphereB')
     const ground = bodies.find(b => b.label === 'ground')
-    const [speedA, setSpeedA] = useState(8)
-    const [speedB, setSpeedB] = useState(6)
+    const [speedA, setSpeedA] = useState('8')
+    const [speedB, setSpeedB] = useState('-6')
     const [collisionType, setCollisionType] = useState('elastic')
 
     const COLLISION_TYPES = [
@@ -226,14 +250,17 @@ export default function ExperimentControls() {
 
     // Store _pushSpeed on bodies so physics engine can read them on RUN
     useEffect(() => {
-      if (sphereA) sphereA._pushSpeed = speedA
-      if (sphereB) sphereB._pushSpeed = -speedB  // negative = leftward
+      if (sphereA) sphereA._pushSpeed = parseFloat(speedA) || 0
+      if (sphereB) sphereB._pushSpeed = parseFloat(speedB) || 0
     }, [sphereA, sphereB, speedA, speedB])
 
     // Apply collision type restitution to both spheres
     useEffect(() => {
       const r = activeType?.restitution ?? 1.0
-      if (sphereA) { sphereA.restitution = r; sphereA.frictionAir = 0.001; sphereA.friction = 0.001 }
+      if (sphereA) { 
+        sphereA.restitution = r; sphereA.frictionAir = 0.001; sphereA.friction = 0.001;
+        sphereA.customCollisionType = collisionType;
+      }
       if (sphereB) { sphereB.restitution = r; sphereB.frictionAir = 0.001; sphereB.friction = 0.001 }
       if (ground) { ground.friction = 0.001; ground.frictionStatic = 0.001 }
     }, [sphereA, sphereB, ground, collisionType])
@@ -270,26 +297,34 @@ export default function ExperimentControls() {
         </div>
 
         {/* ── Sphere A ── */}
-        <div className="bg-[#0c1929] border border-[#1e3a5f] rounded-lg p-2.5">
-          <div className="text-[10px] font-bold text-[#38bdf8] uppercase tracking-widest mb-2">Sphere A</div>
-          <label className="text-[10px] text-zinc-400">Mass: {sphereA ? sphereA.mass.toFixed(1) : '-'} kg</label>
-          <input type="range" min="1" max="30" step="0.5" value={sphereA ? sphereA.mass : 3} disabled={isRunning} onChange={(e) => updateBodyMass('SphereA', parseFloat(e.target.value))} />
-          <label className="text-[10px] text-zinc-400">Initial Speed → : {speedA} m/s</label>
-          <input type="range" min="1" max="20" value={speedA} disabled={isRunning} onChange={(e) => setSpeedA(parseInt(e.target.value))} />
+        <div className="bg-[#0c1929] border border-[#1e3a5f] rounded-lg p-2.5 flex flex-col gap-2">
+          <div className="text-[10px] font-bold text-[#38bdf8] uppercase tracking-widest mb-1">Sphere A</div>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-zinc-400">Mass (kg)</label>
+            <input type="number" step="0.5" min="1" max="30" value={sphereA ? Number(sphereA.mass.toFixed(1)) : 3} disabled={isRunning} onChange={(e) => updateBodyMass('SphereA', parseFloat(e.target.value) || 1)} className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-[#38bdf8] disabled:opacity-40 disabled:cursor-not-allowed" />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-zinc-400">Initial Velocity (m/s)</label>
+            <input type="text" inputMode="numeric" value={speedA} disabled={isRunning} onChange={(e) => setSpeedA(e.target.value)} className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-[#38bdf8] disabled:opacity-40 disabled:cursor-not-allowed" />
+          </div>
         </div>
 
         {/* ── Sphere B ── */}
-        <div className="bg-[#1a0f0a] border border-[#5f3a1e] rounded-lg p-2.5">
-          <div className="text-[10px] font-bold text-[#f97316] uppercase tracking-widest mb-2">Sphere B</div>
-          <label className="text-[10px] text-zinc-400">Mass: {sphereB ? sphereB.mass.toFixed(1) : '-'} kg</label>
-          <input type="range" min="1" max="50" step="0.5" value={sphereB ? sphereB.mass : 8} disabled={isRunning} onChange={(e) => updateBodyMass('SphereB', parseFloat(e.target.value))} />
-          <label className="text-[10px] text-zinc-400">Initial Speed ← : {speedB} m/s</label>
-          <input type="range" min="1" max="20" value={speedB} disabled={isRunning} onChange={(e) => setSpeedB(parseInt(e.target.value))} />
+        <div className="bg-[#1a0f0a] border border-[#5f3a1e] rounded-lg p-2.5 flex flex-col gap-2">
+          <div className="text-[10px] font-bold text-[#f97316] uppercase tracking-widest mb-1">Sphere B</div>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-zinc-400">Mass (kg)</label>
+            <input type="number" step="0.5" min="1" max="50" value={sphereB ? Number(sphereB.mass.toFixed(1)) : 8} disabled={isRunning} onChange={(e) => updateBodyMass('SphereB', parseFloat(e.target.value) || 1)} className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-[#f97316] disabled:opacity-40 disabled:cursor-not-allowed" />
+          </div>
+          <div className="flex items-center justify-between">
+            <label className="text-[10px] text-zinc-400">Initial Velocity (m/s)</label>
+            <input type="text" inputMode="numeric" value={speedB} disabled={isRunning} onChange={(e) => setSpeedB(e.target.value)} className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-[#f97316] disabled:opacity-40 disabled:cursor-not-allowed" />
+          </div>
         </div>
 
         <div className="text-[9px] text-zinc-600 leading-relaxed border-t border-white/5 pt-2">
-          Choose collision type, set mass & speed, then press <b>RUN ▶</b>.<br/>
-          <b>Elastic:</b> KE conserved. <b>Inelastic:</b> objects stick together. Momentum is <em>always</em> conserved: m₁v₁ + m₂v₂ = const.
+          Choose collision type, set mass & velocity, then press <b>RUN ▶</b>.<br/>
+          Positive velocity = Right, Negative velocity = Left. Momentum is <em>always</em> conserved.
         </div>
       </div>
     )
@@ -310,21 +345,28 @@ export default function ExperimentControls() {
     return (
       <div className="flex flex-col gap-4 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-secondary">Spring Controls</h3>
-        <label className="text-[10px] text-zinc-400">Spring Stiffness (k): {currentStiffness.toFixed(3)}</label>
-        <input
-          type="range" min="0.005" max="0.1" step="0.005"
-          value={currentStiffness}
-          onChange={(e) => { if (constraint) constraint.stiffness = parseFloat(e.target.value) }}
-        />
-        <label className="text-[10px] text-zinc-400">Block Mass: {currentMass.toFixed(1)} kg</label>
-        <input type="range" min="1" max="50" value={currentMass} onChange={(e) => updateBodyMass('OscillatingBlock', parseFloat(e.target.value))} />
-
-        <label className="text-[10px] text-zinc-400">Damping (Air Friction): {block ? block.frictionAir.toFixed(3) : '-'}</label>
-        <input
-          type="range" min="0" max="0.1" step="0.005"
-          value={block ? block.frictionAir : 0.01}
-          onChange={(e) => { if (block) block.frictionAir = parseFloat(e.target.value) }}
-        />
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Spring Stiffness (k)</label>
+          <input
+            type="number" min="0.005" max="0.1" step="0.005"
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-secondary"
+            value={Number(currentStiffness.toFixed(3))}
+            onChange={(e) => { if (constraint) constraint.stiffness = parseFloat(e.target.value) || 0.005 }}
+          />
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Block Mass (kg)</label>
+          <input type="number" min="1" max="50" step="0.5" className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-secondary" value={Number(currentMass.toFixed(1))} onChange={(e) => updateBodyMass('OscillatingBlock', parseFloat(e.target.value) || 1)} />
+        </div>
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Damping</label>
+          <input
+            type="number" min="0" max="0.1" step="0.005"
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-secondary"
+            value={block ? Number(block.frictionAir.toFixed(3)) : 0.01}
+            onChange={(e) => { if (block) block.frictionAir = parseFloat(e.target.value) || 0 }}
+          />
+        </div>
 
         <button
           onClick={() => {
@@ -345,25 +387,30 @@ export default function ExperimentControls() {
 
   /* ──────────────────── INCLINE ──────────────────── */
   const renderInclineControls = () => {
-    const ramp = bodies.find(b => b.label === 'InclinedPlane')
-    const slider = bodies.find(b => b.label === 'SliderBlock')
+    const ramp = bodies.find(b => b.label === 'Ramp')
+    const slider = bodies.find(b => b.label === 'Slider')
 
     return (
       <div className="flex flex-col gap-4 mt-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-tertiary">Incline Controls</h3>
-        <label className="text-[10px] text-zinc-400">Slider Mass: {slider ? slider.mass.toFixed(1) : '-'} kg</label>
-        <input type="range" min="1" max="50" value={slider ? slider.mass : 5} onChange={(e) => updateBodyMass('SliderBlock', parseFloat(e.target.value))} />
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Slider Mass (kg)</label>
+          <input type="number" min="1" max="50" step="0.5" className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-tertiary" value={slider ? Number(slider.mass.toFixed(1)) : 5} onChange={(e) => updateBodyMass('Slider', parseFloat(e.target.value) || 1)} />
+        </div>
 
-        <label className="text-[10px] text-zinc-400">Surface Friction (μ): {slider ? slider.friction.toFixed(2) : '-'}</label>
-        <input
-          type="range" min="0" max="1" step="0.05"
-          value={slider ? slider.friction : 0.3}
-          onChange={(e) => {
-            const f = parseFloat(e.target.value)
-            if (slider) { slider.friction = f; slider.frictionStatic = f * 1.2 }
-            if (ramp) { ramp.friction = f; ramp.frictionStatic = f * 1.2 }
-          }}
-        />
+        <div className="flex items-center justify-between">
+          <label className="text-[10px] text-zinc-400">Surface Friction (μ)</label>
+          <input
+            type="number" min="0" max="1" step="0.05"
+            className="w-16 bg-surface text-center text-[11px] text-on-surface border border-outline-variant rounded px-1.5 py-1 focus:outline-none focus:border-tertiary"
+            value={slider ? Number(slider.friction.toFixed(2)) : 0.3}
+            onChange={(e) => {
+              const f = parseFloat(e.target.value) || 0
+              if (slider) { slider.friction = f; slider.frictionStatic = f * 1.2 }
+              if (ramp) { ramp.friction = f; ramp.frictionStatic = f * 1.2 }
+            }}
+          />
+        </div>
 
         <button
           onClick={() => {

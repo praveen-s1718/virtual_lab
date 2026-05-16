@@ -22,19 +22,47 @@ export default function SimulationCanvas({ isShared }) {
 
   const {
     runState, setAddBodyFn, setAddJointFn, setRemoveEntityFn, remoteCollaborators, setSocketConnected,
-    activeTool, setActiveTool, selectedBody, setSelectedBody, inspectedEntity, setInspectedEntity
+    activeTool, setActiveTool, selectedBody, setSelectedBody, inspectedEntity, setInspectedEntity,
+    activePage, localWorkspaceSnapshot, setLocalWorkspaceSnapshot,
+    projectWorkspaceSnapshot, setProjectWorkspaceSnapshot
   } = useSimulationStore()
   const { 
     addBody, addJoint, queryEntityAt, addLock, removeEntity,
-    applyImpulse, applyExplosion, clearBodyForces
+    applyImpulse, applyExplosion, clearBodyForces,
+    getSnapshot, loadSnapshot, clearWorld
   } = usePhysicsEngine(canvasRef, containerRef)
+
+  /* ── Tab Persistence (Snapshotting) ── */
+  const prevPageRef = useRef(activePage)
+  useEffect(() => {
+    if (prevPageRef.current === activePage) return
+
+    // Save departing page snapshot
+    if (prevPageRef.current === 'local-canvas') {
+      const snap = getSnapshot()
+      setLocalWorkspaceSnapshot(snap)
+    } else if (prevPageRef.current === 'project') {
+      const snap = getSnapshot()
+      setProjectWorkspaceSnapshot(snap)
+    }
+
+    // Load incoming page snapshot
+    if (activePage === 'local-canvas') {
+      if (localWorkspaceSnapshot) loadSnapshot(localWorkspaceSnapshot)
+    } else if (activePage === 'project') {
+      if (projectWorkspaceSnapshot) loadSnapshot(projectWorkspaceSnapshot)
+    }
+
+    prevPageRef.current = activePage
+  }, [activePage, getSnapshot, loadSnapshot, localWorkspaceSnapshot, setLocalWorkspaceSnapshot, projectWorkspaceSnapshot, setProjectWorkspaceSnapshot])
 
   /* Register addBody/Joint in store so ControlPalette can call spawn() */
   useEffect(() => { 
     setAddBodyFn(addBody) 
     setAddJointFn(addJoint)
     setRemoveEntityFn(removeEntity)
-  }, [addBody, addJoint, removeEntity, setAddBodyFn, setAddJointFn, setRemoveEntityFn])
+    useSimulationStore.getState().setClearWorldFn(clearWorld)
+  }, [addBody, addJoint, removeEntity, setAddBodyFn, setAddJointFn, setRemoveEntityFn, clearWorld])
 
   /* Read pending experiment from Library load */
   const pendingExperiment = useSimulationStore(state => state.pendingExperiment)
@@ -42,10 +70,16 @@ export default function SimulationCanvas({ isShared }) {
   const loaderFiredRef = useRef(false)
   const lastPendingRef = useRef(null)
   useEffect(() => {
-    // Reset the guard whenever a NEW pendingExperiment arrives (e.g. on Reset)
-    if (pendingExperiment && pendingExperiment !== lastPendingRef.current) {
+    // Reset the guard whenever a NEW pendingExperiment arrives, 
+    // OR if pendingExperiment is cleared, reset so we can reload the same one later.
+    if (pendingExperiment) {
+      if (pendingExperiment !== lastPendingRef.current) {
+        loaderFiredRef.current = false
+        lastPendingRef.current = pendingExperiment
+      }
+    } else {
+      lastPendingRef.current = null
       loaderFiredRef.current = false
-      lastPendingRef.current = pendingExperiment
     }
 
     if (pendingExperiment && addBody && runState === 'idle') {
@@ -54,10 +88,29 @@ export default function SimulationCanvas({ isShared }) {
 
       const exp = pendingExperiment
       // Clear immediately to prevent React double-effect firing and cloning the setup
-      setPendingExperiment(null)
+      setPendingExperiment(null)      // Clear world of previous experiment objects
+      clearWorld()
       
       const w = containerRef.current?.clientWidth || window.innerWidth
       const h = containerRef.current?.clientHeight || window.innerHeight
+
+      // For collision experiment, remove side walls so spheres fly off-screen
+      if (exp.customUI === 'collision') {
+        const eng = getEngine()
+        if (eng) {
+          const allBodies = Matter.Composite.allBodies(eng.world)
+          allBodies.filter(b => b.label === 'wall').forEach(b => Matter.Composite.remove(eng.world, b))
+          
+          // Also expand the ground significantly for this experiment so they don't fall off the floor edge
+          const ground = allBodies.find(b => b.label === 'ground')
+          if (ground) {
+            const wideGround = Matter.Bodies.rectangle(0, 0, w * 20, 60);
+            Matter.Body.setVertices(ground, wideGround.vertices)
+            Matter.Body.setPosition(ground, { x: w/2, y: ground.position.y })
+          }
+        }
+      }
+      
       setTimeout(() => {
         const lookup = {}
         // Spawn bodies
@@ -69,6 +122,13 @@ export default function SimulationCanvas({ isShared }) {
             if (bodyInst) {
               if (b.label) bodyInst.label = b.label
               if (b.id) lookup[b.id] = bodyInst
+              
+              // Initialize inspector metadata if missing
+              if (bodyInst.initialSize === undefined) {
+                bodyInst.initialSize = (b.props?.radius ? b.props.radius * 2 : 58)
+              }
+              if (bodyInst.customScale === undefined) bodyInst.customScale = 1
+              
               // Apply per-body props from experiment config
               if (b.props) {
                 if (b.props.mass) Matter.Body.setMass(bodyInst, b.props.mass)
@@ -82,6 +142,7 @@ export default function SimulationCanvas({ isShared }) {
                 if (b.props.frictionStatic !== undefined) bodyInst.frictionStatic = b.props.frictionStatic
                 if (b.props.frictionAir !== undefined) bodyInst.frictionAir = b.props.frictionAir
                 if (b.props.restitution !== undefined) bodyInst.restitution = b.props.restitution
+                if (b.props.angle !== undefined) Matter.Body.setAngle(bodyInst, b.props.angle)
               }
             }
           })
@@ -235,9 +296,14 @@ export default function SimulationCanvas({ isShared }) {
         setActiveTool(null) // clear tool after use
       }
     } else if (activeTool.category === 'joint') {
-      const localOffset = hit?.type === 'body' 
+      let localOffset = hit?.type === 'body' 
         ? { x: x - hit.entity.position.x, y: y - hit.entity.position.y }
         : null
+
+      // For pulleys, always connect to the center of mass (0, 0 offset)
+      if (activeTool.type === 'pulley' && hit?.type === 'body') {
+        localOffset = { x: 0, y: 0 }
+      }
 
       if (!selectedBody) {
         // Step 1: Select first body
@@ -256,6 +322,9 @@ export default function SimulationCanvas({ isShared }) {
           hit?.type === 'body' ? hit.entity : null, 
           localOffset
         )
+        // Reset tool state so the user can inspect objects again
+        setActiveTool(null)
+        setSelectedBody(null)
       }
     }
   }

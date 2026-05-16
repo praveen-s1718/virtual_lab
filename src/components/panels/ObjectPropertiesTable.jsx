@@ -216,6 +216,31 @@ export default function ObjectPropertiesTable({ activeEntity, type, isInspected 
 
   /* ── Body inspector ── */
   const b   = activeEntity
+
+  /* ── Pulley wheel: only show delete button ── */
+  if (b.label === 'pulleyWheel' || b.label === 'PulleyWheel') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-400/5 border border-cyan-400/15">
+          <span className="material-symbols-outlined text-cyan-400 text-lg">trip_origin</span>
+          <div>
+            <p className="text-xs font-headline font-bold text-cyan-400">Pulley Wheel</p>
+            <p className="text-[8px] font-label text-zinc-500 uppercase tracking-wider">Static • Frictionless</p>
+          </div>
+        </div>
+        {isInspected && (
+          <button
+            onClick={() => { removeEntity('body', b); setInspectedEntity(null) }}
+            className="w-full flex justify-center items-center gap-1.5 px-3 py-2 text-[10px] font-label font-bold tracking-widest uppercase text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors border border-red-400/20"
+          >
+            <span className="material-symbols-outlined text-sm">delete</span>
+            Delete Pulley
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const spd = Math.sqrt(b.velocity.x ** 2 + b.velocity.y ** 2).toFixed(2)
   const computedMass = computeMass(b, density)
 
@@ -281,8 +306,21 @@ export default function ObjectPropertiesTable({ activeEntity, type, isInspected 
             ))}
           </div>
 
-          {/* ── Computed mass (read-only) ── */}
-          <ComputedMassRow mass={computedMass} />
+          {/* ── Mass slider (kg) ── */}
+          <EditProp
+            label="Mass"
+            value={b.mass} min={0.1} max={100} step={0.1}
+            decimals={2}
+            onChange={v => {
+              Matter.Body.setMass(b, v)
+              // Update density to match the new mass (density = mass / volume)
+              const areaMsq = b.area * PX_TO_M * PX_TO_M
+              const newDensity = v / (areaMsq * THICKNESS_M)
+              b.customDensity = newDensity
+              setDensity(newDensity)
+            }}
+            unit="kg"
+          />
 
           {/* ── Dynamics Analysis (F = ma) ── */}
           <div className="col-span-2 mt-2 p-3 bg-white/[0.03] border border-white/[0.05] rounded-xl">

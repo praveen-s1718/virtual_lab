@@ -97,6 +97,8 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
   }, []) // eslint-disable-line
 
   /* ─────────────────────── RUN STATE ──────────────────────── */
+  const prevRunStateRef = useRef(runState)
+
   useEffect(() => {
     const engine = engineRef.current
     const runner = runnerRef.current
@@ -106,16 +108,17 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
       engine.timing.timeScale = 1
       Runner.run(runner, engine)
 
-      // Auto-launch collision experiment spheres on RUN
-      const allBodies = Composite.allBodies(engine.world)
-      const sphereA = allBodies.find(b => b.label === 'SphereA')
-      const sphereB = allBodies.find(b => b.label === 'SphereB')
-      if (sphereA && sphereB) {
-        // Use stored _pushSpeed or defaults — positive = right, negative = left
-        const speedA = sphereA._pushSpeed !== undefined ? sphereA._pushSpeed : 8
-        const speedB = sphereB._pushSpeed !== undefined ? sphereB._pushSpeed : -6
-        Body.setVelocity(sphereA, { x: speedA, y: 0 })
-        Body.setVelocity(sphereB, { x: speedB, y: 0 })
+      // Auto-launch collision experiment spheres ONLY if we are starting fresh (from idle)
+      if (prevRunStateRef.current === 'idle') {
+        const allBodies = Composite.allBodies(engine.world)
+        const sphereA = allBodies.find(b => b.label === 'SphereA')
+        const sphereB = allBodies.find(b => b.label === 'SphereB')
+        if (sphereA && sphereB) {
+          const speedA = sphereA._pushSpeed !== undefined ? sphereA._pushSpeed : 8
+          const speedB = sphereB._pushSpeed !== undefined ? sphereB._pushSpeed : -6
+          Body.setVelocity(sphereA, { x: speedA, y: 0 })
+          Body.setVelocity(sphereB, { x: speedB, y: 0 })
+        }
       }
     } else if (runState === 'slowmo') {
       engine.timing.timeScale = 0.25
@@ -130,13 +133,8 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
 
       const bodies = Composite.allBodies(engine.world)
       if (pendingExp) {
-        // If an experiment is loaded, we clear everything except the default ground and walls
-        // so that SimulationCanvas can cleanly reload the experiment from scratch.
         bodies.filter((b) => b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse').forEach((b) => Composite.remove(engine.world, b))
       } else {
-        // In the free canvas, we just clear non-static user bodies on reset? 
-        // Or we also clear everything? "dont remove anything when i click reset in library not in canvas"
-        // That means in the canvas it SHOULD clear things (or the current behavior is fine).
         bodies.filter((b) => !b.isStatic).forEach((b) => Composite.remove(engine.world, b))
       }
       
@@ -146,6 +144,8 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
       useSimulationStore.getState().setInspectedEntity(null)
       useSimulationStore.getState().setSelectedBody(null)
     }
+
+    prevRunStateRef.current = runState
   }, [runState]) // eslint-disable-line
 
   /* ─────────────────────── REACTIVE ENVIRONMENT ──────────────────────── */
@@ -219,46 +219,125 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         }
       })
 
-      // Atwood machine computation for pulley
+      // Generic Atwood machine computation for ANY pulley joint
+      const allConstraints = Composite.allConstraints(engine.world)
       const allWorldBodies = Composite.allBodies(engine.world)
-      const massA = allWorldBodies.find(b => b.label === 'HangingMassA')
-      const massB = allWorldBodies.find(b => b.label === 'HangingMassB')
-      const pulleyCenter = allWorldBodies.find(b => b.label === 'PulleyWheel')
-      if (massA && massB && pulleyCenter) {
-        const g = 0.0012 * gravityScale
-        const a = g * (massB.mass - massA.mass) / (massA.mass + massB.mass)
+      const pulleyConstraints = allConstraints.filter(c => c.jointType === 'pulley')
+      const g_engine = engine.world.gravity.y * engine.world.gravity.scale
+
+      pulleyConstraints.forEach(c => {
+        const massA = c.bodyA
+        const massB = c.bodyB
+        if (!massA || !massB || massA.isStatic || massB.isStatic) return
+
+        // Find nearest pulley wheel
+        const wheels = allWorldBodies.filter(b => b.label === 'pulleyWheel' || b.label === 'PulleyWheel')
+        if (wheels.length === 0) return
         
-        Body.setVelocity(massA, { x: 0, y: massA.velocity.y - a })
-        Body.setVelocity(massB, { x: 0, y: massB.velocity.y + a })
-        
-        Body.setPosition(massA, { x: pulleyCenter.position.x - 30, y: massA.position.y })
-        Body.setPosition(massB, { x: pulleyCenter.position.x + 30, y: massB.position.y })
-        
-        // Rope length constraint: one goes up, the other goes down by the same amount
-        const totalRope = 400  // fixed rope length
+        let pulleyCenter = wheels[0]
+        let minDist = Infinity
+        wheels.forEach(w => {
+           const dx = (massA.position.x + massB.position.x)/2 - w.position.x
+           const dy = (massA.position.y + massB.position.y)/2 - w.position.y
+           const d = dx*dx + dy*dy
+           if (d < minDist) { minDist = d; pulleyCenter = w }
+        })
+
         const topY = pulleyCenter.position.y + 35
-        const aLen = massA.position.y - topY
-        const bLen = massB.position.y - topY
-        if (aLen + bLen > totalRope) {
-          const excess = (aLen + bLen - totalRope) / 2
-          Body.setPosition(massA, { x: massA.position.x, y: massA.position.y - excess })
-          Body.setPosition(massB, { x: massB.position.x, y: massB.position.y - excess })
+        const xA = pulleyCenter.position.x - 30
+        const xB = pulleyCenter.position.x + 30
+
+        // ── Step 1: Cancel engine gravity completely ──
+        Body.applyForce(massA, massA.position, { x: 0, y: -massA.mass * g_engine })
+        Body.applyForce(massB, massB.position, { x: 0, y: -massB.mass * g_engine })
+        massA.frictionAir = 0
+        massB.frictionAir = 0
+
+        // ── Step 2: Prevent collision resolver from interfering ──
+        // Use a unique negative group so these bodies don't collide with anything
+        const pulleyGroup = -999
+        massA.collisionFilter = { group: pulleyGroup, category: 0x0002, mask: 0 }
+        massB.collisionFilter = { group: pulleyGroup, category: 0x0002, mask: 0 }
+
+        // ── Step 3: Initialize tracking on first frame ──
+        if (c._pulleyVel === undefined) {
+          c._pulleyVel = 0
+          c._displacement = 0
+          c._initYA = massA.position.y
+          c._initYB = massB.position.y
         }
 
-        if (massA.position.y <= topY && massA.velocity.y < 0) {
-          Body.setPosition(massA, { x: massA.position.x, y: topY })
-          Body.setVelocity(massA, { x: 0, y: 0 })
-          Body.setVelocity(massB, { x: 0, y: 0 })
+        // ── Step 4: Compute Atwood acceleration ──
+        // a > 0 means massB is heavier → B falls down, A rises up
+        const a_sys = g_engine * (massB.mass - massA.mass) / (massA.mass + massB.mass)
+
+        // ── Step 5: Accumulate velocity and displacement ──
+        c._pulleyVel += a_sys
+        c._displacement += c._pulleyVel
+
+        // ── Step 6: Directly set positions (bypass engine entirely) ──
+        // A moves UP by displacement, B moves DOWN by displacement
+        let newYA = c._initYA - c._displacement
+        let newYB = c._initYB + c._displacement
+
+        // Clamp: neither block can go above the pulley
+        if (newYA < topY) {
+          newYA = topY
+          c._pulleyVel = 0
         }
-        if (massB.position.y <= topY && massB.velocity.y < 0) {
-          Body.setPosition(massB, { x: massB.position.x, y: topY })
-          Body.setVelocity(massB, { x: 0, y: 0 })
-          Body.setVelocity(massA, { x: 0, y: 0 })
+        if (newYB < topY) {
+          newYB = topY
+          c._pulleyVel = 0
         }
-      }
+
+        Body.setPosition(massA, { x: xA, y: newYA })
+        Body.setPosition(massB, { x: xB, y: newYB })
+
+        // ── Step 7: Zero out velocity so engine cannot move them ──
+        Body.setVelocity(massA, { x: 0, y: 0 })
+        Body.setVelocity(massB, { x: 0, y: 0 })
+      })
     }
 
+    const handleCollisionStart = (event) => {
+      const pairs = event.pairs;
+      for (let i = 0; i < pairs.length; i++) {
+        const { bodyA, bodyB } = pairs[i];
+        if (
+          (bodyA.label === 'SphereA' && bodyB.label === 'SphereB') ||
+          (bodyA.label === 'SphereB' && bodyB.label === 'SphereA')
+        ) {
+          const sphereA = bodyA.label === 'SphereA' ? bodyA : bodyB;
+          const sphereB = bodyA.label === 'SphereB' ? bodyA : bodyB;
+          
+          if (sphereA.customCollisionType === 'inelastic' && !sphereA._welded) {
+            sphereA._welded = true;
+            sphereB._welded = true;
+            
+            // Calculate perfectly inelastic final velocity (momentum conservation)
+            const totalMass = sphereA.mass + sphereB.mass;
+            const newVx = ((sphereA.mass * sphereA.velocity.x) + (sphereB.mass * sphereB.velocity.x)) / totalMass;
+            const newVy = ((sphereA.mass * sphereA.velocity.y) + (sphereB.mass * sphereB.velocity.y)) / totalMass;
+            
+            Body.setVelocity(sphereA, { x: newVx, y: newVy });
+            Body.setVelocity(sphereB, { x: newVx, y: newVy });
+
+            // Create a constraint to weld them together
+            const weld = Constraint.create({
+              bodyA: sphereA,
+              bodyB: sphereB,
+              length: Vector.magnitude(Vector.sub(sphereA.position, sphereB.position)),
+              stiffness: 1,
+              render: { visible: false }
+            });
+            Composite.add(engine.world, weld);
+          }
+        }
+      }
+    };
+
     Events.on(engine, 'beforeUpdate', handleBeforeUpdate)
+    Events.on(engine, 'collisionStart', handleCollisionStart)
     
     // Custom drawing overlay for specific experiments
     const handleAfterRender = () => {
@@ -282,7 +361,7 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         }
         
         // Draw force decomposer for sliding blocks on incline
-        if (body.label === 'SliderBlock') {
+        if (body.label === 'Slider') {
           // Gravity arrow (always straight down)
           context.save()
           context.beginPath()
@@ -392,20 +471,122 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         context.restore()
       }
 
-      // Draw Pulley Rope
-      const massA = allBodies.find(b => b.label === 'HangingMassA')
-      const massB = allBodies.find(b => b.label === 'HangingMassB')
-      const pulleyCenter = allBodies.find(b => b.label === 'PulleyWheel')
-      if (massA && massB && pulleyCenter) {
+      const drawArrow = (pos, vel, color, scale) => {
+        const mag = Math.sqrt(vel.x ** 2 + vel.y ** 2)
+        if (mag < 0.3) return
+        const len = Math.min(mag * scale, 90)
+        const angle = Math.atan2(vel.y, vel.x)
+        const ex = pos.x + Math.cos(angle) * len
+        const ey = pos.y + Math.sin(angle) * len
+
+        context.save()
+        context.strokeStyle = color
+        context.fillStyle = color
+        context.lineWidth = 2.5
+        context.globalAlpha = 0.85
         context.beginPath()
+        context.moveTo(pos.x, pos.y)
+        context.lineTo(ex, ey)
+        context.stroke()
+
+        context.translate(ex, ey)
+        context.rotate(angle)
+        context.beginPath()
+        context.moveTo(0, 0)
+        context.lineTo(-10, -5)
+        context.lineTo(-10, 5)
+        context.closePath()
+        context.fill()
+        context.restore()
+      }
+
+      // Draw Pulley Rope dynamically for all pulleys
+      const pulleyConstraints = Composite.allConstraints(engine.world).filter(c => c.jointType === 'pulley')
+      pulleyConstraints.forEach(c => {
+        const massA = c.bodyA
+        const massB = c.bodyB
+        if (!massA || !massB) return
+
+        const wheels = allBodies.filter(b => b.label === 'pulleyWheel' || b.label === 'PulleyWheel')
+        if (wheels.length === 0) return
+        
+        let pulleyCenter = wheels[0]
+        let minDist = Infinity
+        wheels.forEach(w => {
+           const dx = (massA.position.x + massB.position.x)/2 - w.position.x
+           const dy = (massA.position.y + massB.position.y)/2 - w.position.y
+           const d = dx*dx + dy*dy
+           if (d < minDist) { minDist = d; pulleyCenter = w }
+        })
+
+        const pulleyR = 30
+        const leftX = pulleyCenter.position.x - pulleyR
+        const rightX = pulleyCenter.position.x + pulleyR
+        const pulleyY = pulleyCenter.position.y
+
+        context.beginPath()
+        // Left rope: from massA center straight up to pulley left edge
         context.moveTo(massA.position.x, massA.position.y)
-        context.lineTo(massA.position.x, pulleyCenter.position.y)
-        context.arc(pulleyCenter.position.x, pulleyCenter.position.y, 30, Math.PI, 0)
+        context.lineTo(leftX, pulleyY)
+        // Arc over the pulley wheel (left to right)
+        context.arc(pulleyCenter.position.x, pulleyY, pulleyR, Math.PI, 0)
+        // Right rope: from pulley right edge straight down to massB center
         context.lineTo(massB.position.x, massB.position.y)
         context.strokeStyle = '#d4d4d8'
         context.lineWidth = 2
         context.stroke()
-      }
+
+        // --- Calculate and draw forces ---
+        const gScale = useSimulationStore.getState().gravityScale || 1
+        const g = 9.81 * gScale
+        // a_sys > 0 means B is heavier → B accelerates down, A accelerates up
+        const a_sys = g * (massB.mass - massA.mass) / (massA.mass + massB.mass)
+        const T = (2 * massA.mass * massB.mass * g) / (massA.mass + massB.mass)
+
+        // Individual net accelerations (magnitude is same, direction differs)
+        // For A: net force = T - mA*g → accel_A = (T - mA*g)/mA = T/mA - g
+        // For B: net force = mB*g - T → accel_B = g - T/mB
+        const accelA = T / massA.mass - g   // negative means upward
+        const accelB = g - T / massB.mass   // positive means downward
+        
+        // Draw Gravity (Red) - always points DOWN
+        drawArrow(massA.position, { x: 0, y: massA.mass * g }, '#f87171', 0.5)
+        drawArrow(massB.position, { x: 0, y: massB.mass * g }, '#f87171', 0.5)
+        
+        // Draw Tension (Green) - always points UP
+        drawArrow(massA.position, { x: 0, y: -T }, '#4ade80', 0.5)
+        drawArrow(massB.position, { x: 0, y: -T }, '#4ade80', 0.5)
+
+        // Draw individual Acceleration arrows (Yellow)
+        // A accelerates UP if lighter (accelA < 0), B accelerates DOWN if heavier (accelB > 0)
+        if (Math.abs(a_sys) > 0.01) {
+          drawArrow({ x: massA.position.x - 35, y: massA.position.y }, { x: 0, y: accelA * 3 }, '#fbbf24', 1)
+          drawArrow({ x: massB.position.x + 35, y: massB.position.y }, { x: 0, y: accelB * 3 }, '#fbbf24', 1)
+        }
+
+        // Labels
+        context.save()
+        context.font = "bold 11px 'Inter', sans-serif"
+        context.textAlign = 'center'
+        
+        // Tension label at the top
+        context.fillStyle = '#4ade80'
+        context.fillText(`T = ${T.toFixed(1)} N`, pulleyCenter.position.x, pulleyCenter.position.y - 45)
+        
+        // Individual acceleration labels with direction
+        context.font = "10px 'Inter', sans-serif"
+        context.fillStyle = '#fbbf24'
+        if (Math.abs(a_sys) > 0.01) {
+          const dirA = accelA < 0 ? '↑' : '↓'
+          const dirB = accelB > 0 ? '↓' : '↑'
+          context.fillText(`a = ${Math.abs(accelA).toFixed(2)} m/s² ${dirA}`, massA.position.x - 55, massA.position.y + 25)
+          context.fillText(`a = ${Math.abs(accelB).toFixed(2)} m/s² ${dirB}`, massB.position.x + 55, massB.position.y + 25)
+        } else {
+          context.fillText(`a = 0 (balanced)`, massA.position.x - 55, massA.position.y + 25)
+          context.fillText(`a = 0 (balanced)`, massB.position.x + 55, massB.position.y + 25)
+        }
+        context.restore()
+      })
 
       // Draw Collision Lab specifics
       const sphereA = allBodies.find(b => b.label === 'SphereA')
@@ -424,35 +605,6 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         context.stroke()
         context.restore()
 
-        const drawArrow = (pos, vel, color, scale) => {
-          const mag = Math.sqrt(vel.x ** 2 + vel.y ** 2)
-          if (mag < 0.3) return
-          const len = Math.min(mag * scale, 90)
-          const angle = Math.atan2(vel.y, vel.x)
-          const ex = pos.x + Math.cos(angle) * len
-          const ey = pos.y + Math.sin(angle) * len
-
-          context.save()
-          context.strokeStyle = color
-          context.fillStyle = color
-          context.lineWidth = 2.5
-          context.globalAlpha = 0.85
-          context.beginPath()
-          context.moveTo(pos.x, pos.y)
-          context.lineTo(ex, ey)
-          context.stroke()
-
-          context.translate(ex, ey)
-          context.rotate(angle)
-          context.beginPath()
-          context.moveTo(0, 0)
-          context.lineTo(-10, -5)
-          context.lineTo(-10, 5)
-          context.closePath()
-          context.fill()
-          context.restore()
-        }
-
         drawArrow(sphereA.position, sphereA.velocity, '#38bdf8', 12)
         drawArrow(sphereB.position, sphereB.velocity, '#f97316', 12)
 
@@ -470,12 +622,113 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         drawLabel(sphereA, '#e0f2fe', sphereA.circleRadius || 29)
         drawLabel(sphereB, '#ffedd5', sphereB.circleRadius || 35)
       }
+
+      // Draw Inclined Plane / Slider specifics
+      const slider = allBodies.find(b => b.label === 'Slider')
+      const ramp = allBodies.find(b => b.label === 'Ramp')
+      if (slider && ramp) {
+        context.save()
+        const theta = Math.atan2(200, 400) // Ramp slope
+        const cx = slider.position.x
+        const cy = slider.position.y
+        
+        // Draw Weight (mg) straight down
+        context.beginPath()
+        context.moveTo(cx, cy)
+        context.lineTo(cx, cy + 60)
+        context.strokeStyle = '#f87171' // red
+        context.lineWidth = 2
+        context.stroke()
+        drawArrow({x: cx, y: cy}, {x: 0, y: 1}, '#f87171', 60)
+        
+        // Draw Normal Force (N) perpendicular up
+        const nx = -Math.sin(theta) * 50
+        const ny = -Math.cos(theta) * 50
+        context.beginPath()
+        context.moveTo(cx, cy)
+        context.lineTo(cx + nx, cy + ny)
+        context.strokeStyle = '#fbbf24' // yellow
+        context.lineWidth = 2
+        context.stroke()
+        drawArrow({x: cx, y: cy}, {x: nx, y: ny}, '#fbbf24', 1)
+        
+        // Draw Gravity parallel component (mg sin θ)
+        const px = -Math.cos(theta) * 40
+        const py = Math.sin(theta) * 40
+        context.beginPath()
+        context.moveTo(cx, cy)
+        context.lineTo(cx + px, cy + py)
+        context.strokeStyle = '#f87171'
+        context.setLineDash([4, 4])
+        context.stroke()
+        drawArrow({x: cx, y: cy}, {x: px, y: py}, '#f87171', 1)
+        
+        // Draw velocity / acceleration direction
+        if (Vector.magnitude(slider.velocity) > 0.1) {
+           drawArrow(slider.position, slider.velocity, '#4ade80', 10)
+        }
+
+        // Labels
+        context.setLineDash([])
+        context.font = "bold 11px 'Space Grotesk'"
+        context.fillStyle = '#f87171'
+        context.fillText('mg', cx - 15, cy + 65)
+        context.fillStyle = '#fbbf24'
+        context.fillText('N', cx + nx + 5, cy + ny - 5)
+        context.fillStyle = '#4ade80'
+        context.fillText('v / a', cx + px + 10, cy + py + 15)
+
+        context.restore()
+      }
     }
     
+    // Force pulley positions AFTER all physics + collision resolution
+    const handleAfterUpdate = () => {
+      const allConstraints = Composite.allConstraints(engine.world)
+      const allWorldBodies = Composite.allBodies(engine.world)
+      const pulleyConstraints = allConstraints.filter(c => c.jointType === 'pulley')
+
+      pulleyConstraints.forEach(c => {
+        const massA = c.bodyA
+        const massB = c.bodyB
+        if (!massA || !massB || massA.isStatic || massB.isStatic) return
+        if (c._displacement === undefined) return // not initialized yet
+
+        const wheels = allWorldBodies.filter(b => b.label === 'pulleyWheel' || b.label === 'PulleyWheel')
+        if (wheels.length === 0) return
+        
+        let pulleyCenter = wheels[0]
+        let minDist = Infinity
+        wheels.forEach(w => {
+           const dx = (massA.position.x + massB.position.x)/2 - w.position.x
+           const dy = (massA.position.y + massB.position.y)/2 - w.position.y
+           const d = dx*dx + dy*dy
+           if (d < minDist) { minDist = d; pulleyCenter = w }
+        })
+
+        const topY = pulleyCenter.position.y + 35
+        const xA = pulleyCenter.position.x - 30
+        const xB = pulleyCenter.position.x + 30
+
+        let newYA = c._initYA - c._displacement
+        let newYB = c._initYB + c._displacement
+        if (newYA < topY) newYA = topY
+        if (newYB < topY) newYB = topY
+
+        Body.setPosition(massA, { x: xA, y: newYA })
+        Body.setPosition(massB, { x: xB, y: newYB })
+        Body.setVelocity(massA, { x: 0, y: 0 })
+        Body.setVelocity(massB, { x: 0, y: 0 })
+      })
+    }
+
     Events.on(renderRef.current, 'afterRender', handleAfterRender)
+    Events.on(engine, 'afterUpdate', handleAfterUpdate)
 
     return () => {
       Events.off(engine, 'beforeUpdate', handleBeforeUpdate)
+      Events.off(engine, 'collisionStart', handleCollisionStart)
+      Events.off(engine, 'afterUpdate', handleAfterUpdate)
       if (renderRef.current) Events.off(renderRef.current, 'afterRender', handleAfterRender)
     }
   }, [])
@@ -550,12 +803,12 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         initialSize: 60, customScale: 1
       })
     } else if (type === 'ramp') {
-      // Large inclined plane triangle (300px base, 200px height)
-      const vertices = [{ x: 0, y: 0 }, { x: 300, y: 0 }, { x: 0, y: -200 }]
+      // Large inclined plane triangle (400px base, 200px height)
+      const vertices = [{ x: 0, y: 0 }, { x: 400, y: 0 }, { x: 400, y: -200 }]
       body = Bodies.fromVertices(x, y, [vertices], {
         isStatic: true, label: 'ramp', friction: 0.5, frictionStatic: 0.6,
         render: { fillStyle: 'rgba(168, 85, 247, 0.15)', strokeStyle: '#a855f7', lineWidth: 2 },
-        initialSize: 300, customScale: 1
+        initialSize: 400, customScale: 1
       })
     } else if (type === 'hangingMass') {
       // Visible hanging mass for pulley — distinct from generic block
@@ -566,6 +819,7 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
       })
     }
     if (body) {
+      body.bodyType = type
       body.appliedForces = []
       Composite.add(engine.world, body)
     }
@@ -576,7 +830,7 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
   const queryEntityAt = useCallback((x, y) => {
     const engine = engineRef.current
     if (!engine) return null
-    const bodies = Composite.allBodies(engine.world).filter(b => !b.isStatic && b.label !== 'mouse')
+    const bodies = Composite.allBodies(engine.world).filter(b => b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse')
     const hits = Query.point(bodies, { x, y })
     if (hits.length > 0) return { type: 'body', entity: hits[0] }
 
@@ -613,18 +867,21 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         pointA: { x, y }, bodyB: body, pointB: { x: x - body.position.x, y: y - body.position.y },
         stiffness: 1, length: 0, render: { strokeStyle: '#d4d4d8', type: 'pin' }
       })
+      pin.jointType = type
       Composite.add(engine.world, pin)
     } else if (type === 'axis-y') {
       const rail = Constraint.create({
         pointA: { x, y: body.position.y }, bodyB: body, pointB: { x: x - body.position.x, y: 0 },
         stiffness: 0.8, length: 0, render: { strokeStyle: '#2ff5ff', type: 'line' }
       })
+      rail.jointType = type
       Composite.add(engine.world, rail)
     } else if (type === 'axis-x') {
       const rail = Constraint.create({
         pointA: { x: body.position.x, y }, bodyB: body, pointB: { x: 0, y: y - body.position.y },
         stiffness: 0.8, length: 0, render: { strokeStyle: '#2ff5ff', type: 'line' }
       })
+      rail.jointType = type
       Composite.add(engine.world, rail)
     }
   }, [])
@@ -663,8 +920,8 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
       constraint = Constraint.create({
         bodyA, pointA: offsetA || { x: 0, y: 0 },
         bodyB: bB, pointB: ptB,
-        stiffness: type === 'pulley' ? 1 : 0.2,
-        render: { strokeStyle: type === 'pulley' ? '#2ff5ff' : '#d4d4d8', type: 'line' }
+        stiffness: type === 'pulley' ? 0 : 0.2,
+        render: { strokeStyle: type === 'pulley' ? '#2ff5ff' : '#d4d4d8', type: 'line', visible: type !== 'pulley' }
       })
     } else if (type === 'rope') {
       // Stiff rope: auto-calculates distance between the two bodies as the natural length
@@ -683,7 +940,26 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
     }
 
     if (constraint) {
+      constraint.jointType = type
       Composite.add(engine.world, constraint)
+
+      // For pulley joints, immediately snap both bodies under the pulley wheel
+      if (type === 'pulley' && bodyA && finalBodyB) {
+        const allBodies = Composite.allBodies(engine.world)
+        const wheels = allBodies.filter(b => b.label === 'pulleyWheel' || b.label === 'PulleyWheel')
+        if (wheels.length > 0) {
+          let pulley = wheels[0]
+          let minDist = Infinity
+          wheels.forEach(w => {
+            const dx = (bodyA.position.x + finalBodyB.position.x) / 2 - w.position.x
+            const dy = (bodyA.position.y + finalBodyB.position.y) / 2 - w.position.y
+            const d = dx * dx + dy * dy
+            if (d < minDist) { minDist = d; pulley = w }
+          })
+          Body.setPosition(bodyA, { x: pulley.position.x - 30, y: bodyA.position.y })
+          Body.setPosition(finalBodyB, { x: pulley.position.x + 30, y: finalBodyB.position.y })
+        }
+      }
       
       // GUARANTEE the store selection is wiped clean immediately after the joint is made,
       // so the next click doesn't accidentally attach to the old body.
@@ -715,15 +991,15 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
     const engine = engineRef.current
     if (!engine) return
 
-    const bodies = Composite.allBodies(engine.world).filter(b => !b.isStatic)
+    const bodies = Matter.Composite.allBodies(engine.world).filter(b => !b.isStatic)
     bodies.forEach(body => {
-      const distV = Vector.sub(body.position, point)
-      const dist  = Vector.magnitude(distV)
+      const distV = Matter.Vector.sub(body.position, point)
+      const dist  = Matter.Vector.magnitude(distV)
       
       if (dist < radius && dist > 0) {
         const magnitude = (1 - dist / radius) * power * body.mass
-        const force = Vector.mult(Vector.normalise(distV), magnitude)
-        Body.applyForce(body, body.position, force)
+        const force = Matter.Vector.mult(Matter.Vector.normalise(distV), magnitude)
+        Matter.Body.applyForce(body, body.position, force)
       }
     })
   }, [])
@@ -736,18 +1012,18 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
     const handleAfterRender = () => {
       const { inspectedEntity } = useSimulationStore.getState()
       const ctx = render.context
-      const allBodies = Composite.allBodies(engine.world).filter(b => !b.isStatic)
+      const allBodies = Matter.Composite.allBodies(engine.world).filter(b => !b.isStatic)
 
       allBodies.forEach(body => {
         if (!body.appliedForces || body.appliedForces.length === 0) return
 
         let netFx = 0; let netFy = 0
         body.appliedForces.forEach(f => {
-          const worldPos = Vector.add(body.position, Vector.rotate(f.relativePos, body.angle))
+          const worldPos = Matter.Vector.add(body.position, Matter.Vector.rotate(f.relativePos, body.angle))
           const forceVec = { x: f.i, y: -f.j }
           netFx += forceVec.x; netFy += forceVec.y
 
-          const endPos = Vector.add(worldPos, Vector.mult(forceVec, 2))
+          const endPos = Matter.Vector.add(worldPos, Matter.Vector.mult(forceVec, 2))
           drawArrow(ctx, worldPos, endPos, '#fbbf24')
         })
 
@@ -777,8 +1053,8 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
         }
       } else if (inspectedEntity.type === 'constraint') {
         const c = inspectedEntity.entity
-        const p1 = c.bodyA ? Vector.add(c.bodyA.position, c.pointA || {x:0, y:0}) : c.pointA
-        const p2 = c.bodyB ? Vector.add(c.bodyB.position, c.pointB || {x:0, y:0}) : c.pointB
+        const p1 = c.bodyA ? Matter.Vector.add(c.bodyA.position, c.pointA || {x:0, y:0}) : c.pointA
+        const p2 = c.bodyB ? Matter.Vector.add(c.bodyB.position, c.pointB || {x:0, y:0}) : c.pointB
         if (p1 && p2) {
           ctx.moveTo(p1.x, p1.y)
           ctx.lineTo(p2.x, p2.y)
@@ -793,9 +1069,9 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
       ctx.shadowBlur = 0
     }
 
-    Events.on(render, 'afterRender', handleAfterRender)
+    Matter.Events.on(render, 'afterRender', handleAfterRender)
     return () => {
-      Events.off(render, 'afterRender', handleAfterRender)
+      Matter.Events.off(render, 'afterRender', handleAfterRender)
     }
   }, [])
 
@@ -803,9 +1079,108 @@ export default function usePhysicsEngine(canvasRef, containerRef) {
     if (body) body.appliedForces = []
   }, [])
 
+  const getSnapshot = useCallback(() => {
+    const engine = engineRef.current
+    if (!engine) return null
+    
+    const bodies = Matter.Composite.allBodies(engine.world)
+      .filter(b => b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse')
+      .map(b => ({
+        type: b.bodyType || (b.label === 'sphere' ? 'sphere' : (b.label === 'roof' ? 'roof' : 'block')),
+        x: b.position.x,
+        y: b.position.y,
+        angle: b.angle,
+        velocity: { ...b.velocity },
+        angularVelocity: b.angularVelocity,
+        label: b.label,
+        customScale: b.customScale,
+        initialSize: b.initialSize,
+        props: {
+          mass: b.mass,
+          friction: b.friction,
+          frictionStatic: b.frictionStatic,
+          frictionAir: b.frictionAir,
+          restitution: b.restitution,
+          customDensity: b.customDensity
+        },
+        appliedForces: b.appliedForces ? JSON.parse(JSON.stringify(b.appliedForces)) : []
+      }))
+
+    const constraints = Matter.Composite.allConstraints(engine.world)
+      .filter(c => c.label !== 'Mouse Constraint')
+      .map(c => ({
+        type: c.jointType || (c.label === 'rope' ? 'rope' : (c.label === 'spring' ? 'spring' : 'hinge')),
+        bodyIdA: c.bodyA?.id,
+        bodyIdB: c.bodyB?.id,
+        pointA: { ...c.pointA },
+        pointB: { ...c.pointB },
+        stiffness: c.stiffness,
+        length: c.length,
+        label: c.label
+      }))
+
+    return { bodies, constraints }
+  }, [])
+
+  const loadSnapshot = useCallback((snapshot) => {
+    if (!snapshot) return
+    const engine = engineRef.current
+    if (!engine) return
+    
+    // Clear current world except boundaries
+    Matter.Composite.allBodies(engine.world)
+      .filter(b => b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse')
+      .forEach(b => Matter.Composite.remove(engine.world, b))
+    Matter.Composite.allConstraints(engine.world)
+      .filter(c => c.label !== 'Mouse Constraint')
+      .forEach(c => Matter.Composite.remove(engine.world, c))
+    
+    if (snapshot.bodies) {
+      snapshot.bodies.forEach(b => {
+        const bodyInst = addBody(b.type, b.x, b.y)
+        if (bodyInst) {
+          bodyInst.label = b.label
+          bodyInst.initialSize = b.initialSize
+          bodyInst.customScale = b.customScale
+          bodyInst.appliedForces = b.appliedForces || []
+          
+          Matter.Body.setAngle(bodyInst, b.angle || (b.props && b.props.angle) || 0)
+          Matter.Body.setVelocity(bodyInst, b.velocity || { x: 0, y: 0 })
+          Matter.Body.setAngularVelocity(bodyInst, b.angularVelocity || 0)
+          
+          if (b.props) {
+            Matter.Body.setMass(bodyInst, b.props.mass)
+            bodyInst.friction = b.props.friction
+            bodyInst.frictionStatic = b.props.frictionStatic
+            bodyInst.frictionAir = b.props.frictionAir
+            bodyInst.restitution = b.props.restitution
+            bodyInst.customDensity = b.props.customDensity
+          }
+        }
+      })
+    }
+  }, [addBody])
+
+  const clearWorld = useCallback((includeBoundaries = false) => {
+    const engine = engineRef.current
+    if (!engine) return
+    
+    Matter.Composite.allBodies(engine.world)
+      .filter(b => {
+        if (includeBoundaries) return true
+        return b.label !== 'ground' && b.label !== 'wall' && b.label !== 'mouse'
+      })
+      .forEach(b => Matter.Composite.remove(engine.world, b))
+      
+    Matter.Composite.allConstraints(engine.world)
+      .filter(c => c.label !== 'Mouse Constraint')
+      .forEach(c => Matter.Composite.remove(engine.world, c))
+  }, [])
+
   return { 
     engineRef, renderRef, addBody, addJoint, 
     queryEntityAt, addLock, removeEntity,
+    getSnapshot, loadSnapshot, clearWorld,
     applyImpulse, applyExplosion,
     clearBodyForces
   }
@@ -831,7 +1206,7 @@ function drawArrow(ctx, from, to, color) {
 }
 
 function body_setPos(engine, label, x, y) {
-  const bodies = Composite.allBodies(engine.world)
+  const bodies = Matter.Composite.allBodies(engine.world)
   const b = bodies.find((b) => b.label === label)
-  if (b) Body.setPosition(b, { x, y })
+  if (b) Matter.Body.setPosition(b, { x, y })
 }

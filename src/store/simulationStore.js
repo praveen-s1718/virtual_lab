@@ -33,9 +33,32 @@ const useSimulationStore = create((set, get) => ({
 
   // ── Pending experiment loader ──
   pendingExperiment: null,
-  setPendingExperiment: (exp) => set((state) => ({ pendingExperiment: exp, activeExperimentConfig: exp !== null ? exp : state.activeExperimentConfig })),
-  activeExperimentConfig: null,
+  setPendingExperiment: (exp) => set((state) => ({ 
+    pendingExperiment: exp, 
+    activeExperimentConfig: exp !== null ? exp : state.activeExperimentConfig,
+    activePage: exp !== null ? 'project' : state.activePage,
+    projectWorkspaceSnapshot: exp !== null ? null : state.projectWorkspaceSnapshot
+  })),
   setActiveExperimentConfig: (exp) => set({ activeExperimentConfig: exp }),
+
+  // Snapshots for switching between tabs
+  localWorkspaceSnapshot: null,
+  setLocalWorkspaceSnapshot: (s) => set({ localWorkspaceSnapshot: s }),
+
+  projectWorkspaceSnapshot: null,
+  setProjectWorkspaceSnapshot: (s) => set({ projectWorkspaceSnapshot: s }),
+
+  clearWorldFn: null,
+  setClearWorldFn: (fn) => set({ clearWorldFn: fn }),
+
+  closeActiveProject: () => set((state) => {
+    if (state.clearWorldFn) state.clearWorldFn()
+    return { 
+      activeExperimentConfig: null, 
+      activePage: 'library',
+      projectWorkspaceSnapshot: null
+    }
+  }),
 
   // ── Active nav page ──
   activePage: 'local-canvas',
@@ -58,7 +81,7 @@ const useSimulationStore = create((set, get) => ({
     return { sharedProjects: updated, activeSharedProjectId: id, labId: id }
   }),
   openSharedProject: (id) => set({ activeSharedProjectId: id, labId: id }),
-  closeSharedProject: () => set({ activeSharedProjectId: null }),
+  closeSharedProject: () => set({ activeSharedProjectId: null, activePage: 'library' }),
   deleteSharedProject: (id) => set((state) => {
     const updated = state.sharedProjects.filter(p => p.id !== id)
     saveSharedProjects(updated)

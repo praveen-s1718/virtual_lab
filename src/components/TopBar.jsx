@@ -89,9 +89,6 @@ export default function TopBar() {
               id={`nav-${id}`}
               onClick={() => {
                 setActivePage(id)
-                if (id === 'local-canvas' || id === 'shared-canvas') {
-                  useSimulationStore.getState().setActiveExperimentConfig(null)
-                }
               }}
               className={`font-headline uppercase tracking-[0.05em] text-xs font-bold transition-all duration-200 ${
                 activePage === id ? 'nav-link-active' : 'nav-link'
@@ -100,6 +97,29 @@ export default function TopBar() {
               {label}
             </button>
           ))}
+
+          {/* Dynamic Project Tab */}
+          {useSimulationStore.getState().activeExperimentConfig && (
+            <div className="flex items-center gap-1 group">
+              <button
+                onClick={() => setActivePage('project')}
+                className={`font-headline uppercase tracking-[0.05em] text-xs font-bold transition-all duration-200 py-1 px-2 rounded-md ${
+                  activePage === 'project' ? 'bg-primary/10 text-primary' : 'text-zinc-500 hover:text-zinc-300'
+                }`}
+              >
+                {useSimulationStore.getState().activeExperimentConfig.title}
+              </button>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  useSimulationStore.getState().closeActiveProject()
+                }}
+                className="w-5 h-5 flex items-center justify-center rounded-full hover:bg-white/10 text-zinc-600 hover:text-white transition-all"
+              >
+                <span className="material-symbols-outlined text-[14px]">close</span>
+              </button>
+            </div>
+          )}
         </nav>
       </div>
 

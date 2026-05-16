@@ -11,8 +11,8 @@ import useSimulationStore from './store/simulationStore'
 
 /* ── Simulation page ── */
 function SimulationPage({ isShared }) {
-  const activeExperimentConfig = useSimulationStore(state => state.activeExperimentConfig)
-  const isExperiment = !!activeExperimentConfig
+  const activePage = useSimulationStore(state => state.activePage)
+  const isExperiment = activePage === 'project'
 
   return (
     <>
@@ -41,16 +41,22 @@ export default function App() {
   return (
     <div className="bg-surface text-on-surface font-body h-screen w-screen overflow-hidden">
       <TopBar />
-      {activePage === 'library' ? (
-        <main className="fixed inset-0 pt-16 blueprint-grid overflow-hidden">
+      
+      {/* Always keep simulation mounted so physics engine and snapshot logic stay alive */}
+      <SimulationPage isShared={activePage === 'shared-canvas'} />
+
+      {/* Render Library Page on top */}
+      {activePage === 'library' && (
+        <main className="fixed inset-0 pt-16 blueprint-grid overflow-hidden bg-surface z-40">
           <LibraryPage />
         </main>
-      ) : activePage === 'shared-canvas' && !activeSharedProjectId ? (
-        <main className="fixed inset-0 pt-16 blueprint-grid overflow-hidden bg-surface">
+      )}
+
+      {/* Render Shared Canvas Home on top */}
+      {activePage === 'shared-canvas' && !activeSharedProjectId && (
+        <main className="fixed inset-0 pt-16 blueprint-grid overflow-hidden bg-surface z-40">
           <SharedCanvasHome />
         </main>
-      ) : (
-        <SimulationPage isShared={activePage === 'shared-canvas'} />
       )}
     </div>
   )

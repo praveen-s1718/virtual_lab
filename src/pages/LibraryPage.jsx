@@ -30,7 +30,6 @@ export default function LibraryPage() {
     // Clear simulation then queue experiment for when canvas mounts
     setRunState('idle')
     useSimulationStore.getState().setPendingExperiment(experiment)
-    setActivePage('simulation')
   }
 
   const pillBase = 'px-3 py-1 rounded-full text-[10px] font-label font-bold uppercase tracking-widest border transition-all duration-150 cursor-pointer'
@@ -60,7 +59,6 @@ export default function LibraryPage() {
             {[
               { label: 'Experiments', value: EXPERIMENTS.length },
               { label: 'Categories',  value: CATEGORIES.length - 1 },
-              { label: 'Community',   value: '3K+' },
             ].map(({ label, value }) => (
               <div key={label} className="flex flex-col items-end">
                 <span className="text-2xl font-headline font-black text-primary">{value}</span>
@@ -169,7 +167,7 @@ export default function LibraryPage() {
           </p>
           <button
             id="library-back-btn"
-            onClick={() => setActivePage('simulation')}
+            onClick={() => setActivePage('local-canvas')}
             className="flex items-center gap-1.5 text-[10px] font-label text-zinc-600 hover:text-primary uppercase tracking-widest transition-colors"
           >
             <span className="material-symbols-outlined text-sm">arrow_back</span>

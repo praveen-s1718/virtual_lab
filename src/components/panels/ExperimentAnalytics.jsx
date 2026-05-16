@@ -62,17 +62,28 @@ export default function ExperimentAnalytics() {
     const engine = getEngine()
     if (!engine) return
 
+    let currentKE = null
     let keBefore = null
     const computeKE = (body) => {
       const v = Matter.Vector.magnitude(body.velocity)
       return 0.5 * body.mass * v * v + 0.5 * body.inertia * body.angularVelocity ** 2
     }
 
+    const handleBeforeUpdate = () => {
+      const engine = getEngine()
+      if (!engine) return
+      const sA = Matter.Composite.allBodies(engine.world).find(b => b.label === 'SphereA')
+      const sB = Matter.Composite.allBodies(engine.world).find(b => b.label === 'SphereB')
+      if (sA && sB) {
+        currentKE = computeKE(sA) + computeKE(sB)
+      }
+    }
+
     const handleStart = (e) => {
       for (const pair of e.pairs) {
         const labels = [pair.bodyA.label, pair.bodyB.label]
         if (labels.includes('SphereA') && labels.includes('SphereB')) {
-          keBefore = computeKE(pair.bodyA) + computeKE(pair.bodyB)
+          keBefore = currentKE
         }
       }
     }
@@ -89,9 +100,11 @@ export default function ExperimentAnalytics() {
       }
     }
 
+    Matter.Events.on(engine, 'beforeUpdate', handleBeforeUpdate)
     Matter.Events.on(engine, 'collisionStart', handleStart)
     Matter.Events.on(engine, 'collisionEnd', handleEnd)
     return () => {
+      Matter.Events.off(engine, 'beforeUpdate', handleBeforeUpdate)
       Matter.Events.off(engine, 'collisionStart', handleStart)
       Matter.Events.off(engine, 'collisionEnd', handleEnd)
     }
@@ -112,10 +125,13 @@ export default function ExperimentAnalytics() {
         const bob = bodies.find(b => b.label === 'PendulumBob')
         const pivot = bodies.find(b => b.label === 'PendulumBeam')
         if (bob && pivot) {
+          const v = Matter.Vector.magnitude(bob.velocity)
+          // Stop recording if bob has practically stopped (damping/friction)
+          if (v < 0.01 && data.length > 50) return
+
           const dx = bob.position.x - pivot.position.x
           const dy = bob.position.y - pivot.position.y
           const theta = Math.atan2(dx, dy) * (180 / Math.PI)
-          const v = Matter.Vector.magnitude(bob.velocity)
           const ropeLen = Math.sqrt(dx * dx + dy * dy) || 1
           const height = ropeLen - dy
           const ke = 0.5 * bob.mass * v * v
@@ -128,23 +144,48 @@ export default function ExperimentAnalytics() {
         if (sA && sB) {
           const vA = Matter.Vector.magnitude(sA.velocity)
           const vB = Matter.Vector.magnitude(sB.velocity)
+          
+          // Only record if at least one sphere is still moving significantly
+          // AND they are within a reasonable range of the visible canvas.
+          // This prevents recording "stuck" jittering at the corners.
+          const isOffScreen = (sA.position.x < -200 || sA.position.x > window.innerWidth + 200) &&
+                              (sB.position.x < -200 || sB.position.x > window.innerWidth + 200);
+          
+          if (isOffScreen && data.length > 40) return;
+          if (vA < 0.05 && vB < 0.05 && data.length > 20) return;
+
           const keA = 0.5 * sA.mass * vA * vA
           const keB = 0.5 * sB.mass * vB * vB
-          setData(prev => [...prev, { time: t, keA: +keA.toFixed(3), keB: +keB.toFixed(3), keTotal: +(keA + keB).toFixed(3) }])
+          // Momentum: p = m * v. We use the X component of velocity for directional momentum.
+          const pA = sA.mass * sA.velocity.x
+          const pB = sB.mass * sB.velocity.x
+          setData(prev => [...prev, { 
+            time: t, 
+            keA: +keA.toFixed(3), 
+            keB: +keB.toFixed(3), 
+            keTotal: +(keA + keB).toFixed(3),
+            pA: +pA.toFixed(3),
+            pB: +pB.toFixed(3),
+            pTotal: +(pA + pB).toFixed(3)
+          }])
         }
       } else if (activeExperimentConfig.customUI === 'spring') {
         const block = bodies.find(b => b.label === 'OscillatingBlock')
         const ceiling = bodies.find(b => b.label === 'Ceiling')
         if (block && ceiling) {
-          const dy = block.position.y - ceiling.position.y
           const v = Matter.Vector.magnitude(block.velocity)
+          if (v < 0.01 && data.length > 50) return
+
+          const dy = block.position.y - ceiling.position.y
           const ke = 0.5 * block.mass * v * v
           setData(prev => [...prev, { time: t, y: +dy.toFixed(1), speed: +v.toFixed(2), ke: +ke.toFixed(3) }])
         }
       } else if (activeExperimentConfig.customUI === 'incline') {
-        const slider = bodies.find(b => b.label === 'SliderBlock')
+        const slider = bodies.find(b => b.label === 'Slider')
         if (slider) {
           const v = Matter.Vector.magnitude(slider.velocity)
+          if (v < 0.01 && data.length > 20) return
+
           const ke = 0.5 * slider.mass * v * v
           setData(prev => [...prev, { time: t, v: +v.toFixed(2), ke: +ke.toFixed(3) }])
         }
@@ -152,6 +193,9 @@ export default function ExperimentAnalytics() {
         const proj = bodies.find(b => b.label === 'Projectile')
         const ground = bodies.find(b => b.label === 'GroundPlane')
         if (proj) {
+          const v = Matter.Vector.magnitude(proj.velocity)
+          if (v < 0.05 && data.length > 10) return
+
           const groundY = ground ? ground.position.y : window.innerHeight * 0.88
           setData(prev => [...prev, { time: t, h: +Math.max(0, groundY - proj.position.y).toFixed(1), d: +proj.position.x.toFixed(1) }])
         }
@@ -159,6 +203,10 @@ export default function ExperimentAnalytics() {
         const mA = bodies.find(b => b.label === 'HangingMassA')
         const mB = bodies.find(b => b.label === 'HangingMassB')
         if (mA && mB) {
+          const vA = Math.abs(mA.velocity.y)
+          const vB = Math.abs(mB.velocity.y)
+          if (vA < 0.01 && vB < 0.01 && data.length > 20) return
+
           setData(prev => [...prev, {
             time: t,
             posA: +mA.position.y.toFixed(1), posB: +mB.position.y.toFixed(1),
@@ -231,9 +279,25 @@ export default function ExperimentAnalytics() {
             <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
             <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
             <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: '9px', fontFamily: 'Inter' }} />
-            <Line type="monotone" dataKey="keA" stroke="#38bdf8" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere A" />
-            <Line type="monotone" dataKey="keB" stroke="#f97316" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere B" />
-            <Line type="monotone" dataKey="keTotal" stroke="#4ade80" dot={false} strokeWidth={1.5} strokeDasharray="4 2" isAnimationActive={false} name="Total" />
+            <Line type="monotone" dataKey="keA" stroke="#38bdf8" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere A (KE)" />
+            <Line type="monotone" dataKey="keB" stroke="#f97316" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere B (KE)" />
+            <Line type="monotone" dataKey="keTotal" stroke="#4ade80" dot={false} strokeWidth={1.5} strokeDasharray="4 2" isAnimationActive={false} name="Total KE" />
+          </LineChart>
+        </ResponsiveContainer>
+      </ChartSection>
+
+      <ChartSection title="Momentum Over Time (P = mv)" color="#a855f7">
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={data} margin={{ top: 5, right: 10, bottom: 0, left: -10 }}>
+            <CartesianGrid {...GRID_STYLE} />
+            <XAxis dataKey="time" tickFormatter={t => formatTime(t, data)} tick={AXIS_STYLE} tickLine={false} axisLine={false} interval="preserveStartEnd" />
+            <YAxis tick={AXIS_STYLE} tickLine={false} axisLine={false} />
+            <ReferenceLine y={0} stroke="rgba(255,255,255,0.1)" strokeDasharray="3 3" />
+            <Tooltip contentStyle={TOOLTIP_STYLE} labelFormatter={t => formatTime(t, data)} />
+            <Legend iconType="circle" iconSize={6} wrapperStyle={{ fontSize: '9px', fontFamily: 'Inter' }} />
+            <Line type="monotone" dataKey="pA" stroke="#38bdf8" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere A (p)" />
+            <Line type="monotone" dataKey="pB" stroke="#f97316" dot={false} strokeWidth={2} isAnimationActive={false} name="Sphere B (p)" />
+            <Line type="monotone" dataKey="pTotal" stroke="#4ade80" dot={false} strokeWidth={1.5} strokeDasharray="4 2" isAnimationActive={false} name="Total p" />
           </LineChart>
         </ResponsiveContainer>
       </ChartSection>

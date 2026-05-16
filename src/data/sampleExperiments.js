@@ -37,35 +37,7 @@ export const EXPERIMENTS = [
     customUI: 'pendulum'
   },
 
-  /* ═══════════════════════════════════════════════════════════
-   * 2. PROJECTILE MOTION
-   * A static cannon (rectangle barrel) on the left and a
-   * floor at the bottom. The ExperimentControls "FIRE" button
-   * spawns a projectile sphere at the tip.
-   * ═══════════════════════════════════════════════════════════ */
-  {
-    id: 'exp-projectile',
-    title: 'Projectile Motion Simulator',
-    author: 'System',
-    authorColor: 'secondary',
-    category: 'Kinematics',
-    difficulty: 'Intermediate',
-    tags: ['trajectory', 'velocity', 'parabola'],
-    description: 'Analyze parabolic trajectories under gravitational influence. Adjust launch angle and initial velocity.',
-    bodies: [],
-    locks: [],
-    joints: [],
-    svgPreview: 'projectile',
-    stats: { bodies: 2, joints: 0, runtime: 'Live' },
-    customUI: 'projectile'
-  },
 
-  /* ═══════════════════════════════════════════════════════════
-   * 3. PULLEY / ATWOOD MACHINE
-   * Static pulley wheel at top centre. Two hanging masses
-   * positioned directly below each side of the wheel so the
-   * custom Atwood sync in beforeUpdate works immediately.
-   * ═══════════════════════════════════════════════════════════ */
   {
     id: 'exp-pulley',
     title: 'Pulley & Weight System',
@@ -75,11 +47,19 @@ export const EXPERIMENTS = [
     difficulty: 'Intermediate',
     tags: ['tension', 'mass', 'acceleration'],
     description: 'Two hanging masses connected by a rope over a fixed pulley (Atwood machine). Measure tension and acceleration.',
-    bodies: [],
-    locks: [],
-    joints: [],
-    svgPreview: 'truss',
-    stats: { bodies: 3, joints: 0, runtime: 'Live' },
+    bodies: [
+      { id: 'pulley', type: 'pulleyWheel', x: 0.5, y: 0.2, label: 'PulleyWheel' },
+      { id: 'massA',  type: 'hangingMass', x: 0.4, y: 0.5, label: 'HangingMassA', props: { mass: 2 } },
+      { id: 'massB',  type: 'hangingMass', x: 0.6, y: 0.5, label: 'HangingMassB', props: { mass: 5 } }
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'pulley' }
+    ],
+    joints: [
+      { type: 'pulley', bodyIdA: 'massA', bodyIdB: 'massB' }
+    ],
+    svgPreview: 'pulley',
+    stats: { bodies: 3, joints: 1, runtime: 'Live' },
     customUI: 'pulley'
   },
 
@@ -108,36 +88,6 @@ export const EXPERIMENTS = [
     customUI: 'collision'
   },
 
-  /* ═══════════════════════════════════════════════════════════
-   * 5. SPRING / SIMPLE HARMONIC MOTION
-   * Visible wall on the left, a wide floor, and a block
-   * connected by a spring. The block sits on the floor and
-   * the spring drives SHM.
-   * ═══════════════════════════════════════════════════════════ */
-  {
-    id: 'exp-spring',
-    title: 'Spring & Harmonic Motion Lab',
-    author: 'System',
-    authorColor: 'secondary',
-    category: 'Oscillations',
-    difficulty: 'Advanced',
-    tags: ['spring', 'SHM', 'Hookes Law'],
-    description: 'A block suspended by a spring from a high surface. Observe amplitude, frequency, and harmonic motion.',
-    bodies: [
-      { id: 'ceiling', type: 'roof',  x: 0.5, y: 0.15, label: 'Ceiling' },
-      { id: 'block',   type: 'block', x: 0.5, y: 0.15, py: 150, label: 'OscillatingBlock', props: { mass: 8, frictionAir: 0.002 } }
-    ],
-    locks: [
-      { type: 'freeze', bodyId: 'ceiling' },
-      { type: 'axis-x', bodyId: 'block' }
-    ],
-    joints: [
-      { type: 'spring', bodyIdA: 'ceiling', bodyIdB: 'block', offsetA: { x: 0, y: 20 }, offsetB: { x: 0, y: -29 } }
-    ],
-    svgPreview: 'spring',
-    stats: { bodies: 2, joints: 1, runtime: 'Live' },
-    customUI: 'spring'
-  },
 
   /* ═══════════════════════════════════════════════════════════
    * 6. INCLINED PLANE & FRICTION
@@ -154,8 +104,13 @@ export const EXPERIMENTS = [
     difficulty: 'Advanced',
     tags: ['friction', 'slope', 'normal force'],
     description: 'A large ramp with a sliding block. Explore friction coefficients and force vector decomposition.',
-    bodies: [],
-    locks: [],
+    bodies: [
+      { id: 'ramp',   type: 'ramp',  x: 0.5, y: 0.9, label: 'Ramp', props: { isStatic: true, friction: 0.1 } },
+      { id: 'slider', type: 'block', x: 0.542, y: 0.6842, label: 'Slider', props: { mass: 5, friction: 0.1, angle: -0.4636 } }
+    ],
+    locks: [
+      { type: 'freeze', bodyId: 'ramp' }
+    ],
     joints: [],
     svgPreview: 'incline',
     stats: { bodies: 2, joints: 0, runtime: 'Live' },

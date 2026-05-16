@@ -21,6 +21,11 @@ export default function BottomBar() {
       // If inside a library experiment, re-queue it so it reloads from the template
       if (activeExperimentConfig) {
         setPendingExperiment({ ...activeExperimentConfig })
+      } else {
+        // In Local Canvas, reset clears all user-placed objects
+        const state = useSimulationStore.getState()
+        if (state.clearWorldFn) state.clearWorldFn()
+        state.setActiveTool(null)
       }
     } else if (action.id === 'run' && runState === 'running') {
       setRunState('paused')

@@ -39,6 +39,37 @@ const THUMBS = {
       <text x="60" y="85" textAnchor="middle" fill="#3c494e" fontSize="7" fontFamily="Space Grotesk">Stress Peak: 44.2kN</text>
     </svg>
   ),
+  pulley: (
+    <svg viewBox="0 0 120 90" className="w-full h-full">
+      {/* Support bar */}
+      <line x1="30" y1="8" x2="90" y2="8" stroke="#3c494e" strokeWidth="2" />
+      {[35,45,55,65,75,85].map(x => (
+        <line key={x} x1={x} y1="8" x2={x-2} y2="13" stroke="#3c494e" strokeWidth="1" strokeOpacity="0.5" />
+      ))}
+      {/* Pulley wheel */}
+      <circle cx="60" cy="20" r="10" fill="none" stroke="#2ff5ff" strokeWidth="2" />
+      <circle cx="60" cy="20" r="2" fill="#2ff5ff" />
+      {/* Left rope */}
+      <line x1="50" y1="20" x2="50" y2="58" stroke="#d4d4d8" strokeWidth="1.5" />
+      {/* Right rope */}
+      <line x1="70" y1="20" x2="70" y2="68" stroke="#d4d4d8" strokeWidth="1.5" />
+      {/* Rope over pulley (arc) */}
+      <path d="M 50 20 A 10 10 0 0 1 70 20" fill="none" stroke="#d4d4d8" strokeWidth="1.5" />
+      {/* Mass A (lighter, higher) */}
+      <rect x="39" y="58" width="22" height="14" rx="2" fill="rgba(47,245,255,0.12)" stroke="#2ff5ff" strokeWidth="1.5" />
+      <text x="50" y="68" textAnchor="middle" fill="#2ff5ff" fontSize="7" fontFamily="Space Grotesk">m₁</text>
+      {/* Mass B (heavier, lower) */}
+      <rect x="57" y="68" width="26" height="16" rx="2" fill="rgba(255,243,210,0.15)" stroke="#fff3d2" strokeWidth="1.5" />
+      <text x="70" y="79" textAnchor="middle" fill="#fff3d2" fontSize="7" fontFamily="Space Grotesk">m₂</text>
+      {/* Acceleration arrows */}
+      <line x1="38" y1="68" x2="38" y2="58" stroke="#fbbf24" strokeWidth="1.2" />
+      <polygon points="38,56 36,60 40,60" fill="#fbbf24" />
+      <line x1="85" y1="72" x2="85" y2="82" stroke="#fbbf24" strokeWidth="1.2" />
+      <polygon points="85,84 83,80 87,80" fill="#fbbf24" />
+      {/* Formula */}
+      <text x="60" y="88" textAnchor="middle" fill="#3c494e" fontSize="6.5" fontFamily="Space Grotesk">a = g(m₂−m₁)/(m₁+m₂)</text>
+    </svg>
+  ),
   projectile: (
     <svg viewBox="0 0 120 90" className="w-full h-full">
       <path d="M 10 75 Q 55 10 110 65" fill="none" stroke="#2ff5ff" strokeWidth="1.5" strokeDasharray="3 2" strokeOpacity="0.6" />
@@ -65,10 +96,6 @@ const THUMBS = {
   incline: (
     <svg viewBox="0 0 120 90" className="w-full h-full">
       <polygon points="10,80 110,80 110,35" fill="rgba(60,73,78,0.2)" stroke="#3c494e" strokeWidth="1.5" />
-      <rect x="38" y="46" width="22" height="16" rx="2" fill="rgba(47,245,255,0.15)" stroke="#2ff5ff" strokeWidth="1.5"
-        transform="rotate(-27,49,54)" />
-      <line x1="76" y1="57" x2="76" y2="35" stroke="#ffd5cb" strokeWidth="1" strokeDasharray="2 1" />
-      <text x="82" y="48" fill="#ffd5cb" fontSize="7" fontFamily="Space Grotesk">N</text>
       <text x="60" y="87" textAnchor="middle" fill="#3c494e" fontSize="7" fontFamily="Space Grotesk">a = g(sinθ − μcosθ)</text>
     </svg>
   ),

@@ -186,6 +186,31 @@ function ObjectPropertiesTable({ activeEntity, type, isInspected }) {
   }
 
   const b   = activeEntity
+
+  /* ── Pulley wheel: only show delete button ── */
+  if (b.label === 'pulleyWheel' || b.label === 'PulleyWheel') {
+    return (
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-cyan-400/5 border border-cyan-400/15">
+          <span className="material-symbols-outlined text-cyan-400 text-lg">trip_origin</span>
+          <div>
+            <p className="text-xs font-headline font-bold text-cyan-400">Pulley Wheel</p>
+            <p className="text-[8px] font-label text-zinc-500 uppercase tracking-wider">Static • Frictionless</p>
+          </div>
+        </div>
+        {isInspected && (
+          <button
+            onClick={() => { removeEntity('body', b); setInspectedEntity(null) }}
+            className="w-full flex justify-center items-center gap-1.5 px-3 py-2 text-[10px] font-label font-bold tracking-widest uppercase text-red-400 bg-red-400/10 hover:bg-red-400/20 rounded-lg transition-colors border border-red-400/20"
+          >
+            <span className="material-symbols-outlined text-sm">delete</span>
+            Delete Pulley
+          </button>
+        )}
+      </div>
+    )
+  }
+
   const spd = Math.sqrt(b.velocity.x ** 2 + b.velocity.y ** 2).toFixed(2)
   const computedMass = computeMass(b, density)
   const sizeLabel = b.label === 'sphere' ? 'Radius (m)' : 'Size / Width (m)'
@@ -355,110 +380,124 @@ export default function AnalyticsPanel() {
     }
   }, [inspectedEntity])
 
-  // Hide this panel when a library experiment is active (Lab Analytics takes over)
-  if (activeExperimentConfig) return null
-  if (!open) return null
+  const showLegacyPanel = !activeExperimentConfig && open;
+  const showInspector = !!inspectedEntity;
+
+  // We still need to render the container for ExperimentAnalytics even if the legacy panel is hidden
+  if (!activeExperimentConfig && !open) return null;
 
   return (
-    <div className="absolute bottom-4 right-4 z-30 w-80 select-none">
-      <div className="bg-surface-container-highest/75 backdrop-blur-xl rounded-xl border border-white/[0.07] shadow-panel overflow-hidden">
-        <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <span className={`material-symbols-outlined text-primary text-sm ${isLive ? '' : 'opacity-50'}`}>
-              analytics
-            </span>
-            <h4 className="text-[10px] font-headline font-bold text-on-surface uppercase tracking-widest">
-              Live Diagnostics
-            </h4>
-            {isLive && (
-              <span className="flex items-center gap-1 ml-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                <span className="text-[8px] font-label text-primary/70 uppercase tracking-widest">Live</span>
+    <div className="absolute bottom-4 right-4 z-30 w-80 select-none flex flex-col gap-3">
+      {(showLegacyPanel || showInspector) && (
+        <div className="bg-surface-container-highest/75 backdrop-blur-xl rounded-xl border border-white/[0.07] shadow-panel overflow-hidden">
+          <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span className={`material-symbols-outlined text-primary text-sm ${isLive ? '' : 'opacity-50'}`}>
+                {showInspector ? 'tune' : 'analytics'}
               </span>
-            )}
-          </div>
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setCollapsed((v) => !v)}
-              className="material-symbols-outlined text-zinc-600 hover:text-zinc-300 text-base transition-all duration-200"
-              style={{ transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}
-              title={collapsed ? 'Expand' : 'Collapse'}
-            >
-              expand_more
-            </button>
-            <button
-              onClick={() => setOpen(false)}
-              className="material-symbols-outlined text-zinc-600 hover:text-zinc-300 text-base transition-colors"
-              title="Close"
-            >
-              close
-            </button>
-          </div>
-        </div>
-
-        <div
-          className="overflow-hidden transition-all duration-300"
-          style={{ maxHeight: collapsed ? '0px' : '800px' }} 
-        >
-          <div className="px-3 py-3 border-b border-white/[0.05]">
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-[9px] font-label text-zinc-600 uppercase tracking-widest">
-                Energy over time
-              </span>
-              <div className="flex gap-3 text-[8px] font-label text-zinc-700 uppercase tracking-wider">
-                {chartData.length > 0 && (
-                  <>
-                    <span className="text-primary">
-                      KE: {(chartData.at(-1)?.ke ?? 0).toFixed(1)} J
-                    </span>
-                    <span className="text-primary-fixed">
-                      PE: {(chartData.at(-1)?.pe ?? 0).toFixed(1)} J
-                    </span>
-                  </>
-                )}
-              </div>
-            </div>
-            <EnergyBarChart data={chartData} />
-          </div>
-
-          <div className="bg-surface-container-lowest/60 px-4 py-3 border-b border-white/[0.05] overflow-y-auto no-scrollbar max-h-[320px]">
-            <h5 className="text-[8px] font-headline font-bold text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
-              <span className="material-symbols-outlined text-xs">
-                {inspectedEntity ? 'tune' : (activeEntity ? 'speed' : 'radio_button_unchecked')}
-              </span>
-              {inspectedEntity ? 'Inspector' : 'Live Fastest Object'}
-              {activeEntity?.entity && (
-                <span className="ml-auto text-zinc-700 normal-case tracking-normal font-label font-normal">
-                  #{activeEntity.entity.id}
+              <h4 className="text-[10px] font-headline font-bold text-on-surface uppercase tracking-widest">
+                {showInspector ? 'Object Inspector' : 'Live Diagnostics'}
+              </h4>
+              {isLive && (
+                <span className="flex items-center gap-1 ml-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                  <span className="text-[8px] font-label text-primary/70 uppercase tracking-widest">Live</span>
                 </span>
               )}
-            </h5>
-            {/* INLINED TABLE */}
-            <ObjectPropertiesTable activeEntity={activeEntity?.entity} type={activeEntity?.type} isInspected={!!inspectedEntity} />
+            </div>
+            <div className="flex items-center gap-1">
+              {!activeExperimentConfig && (
+                <button
+                  onClick={() => setCollapsed((v) => !v)}
+                  className="material-symbols-outlined text-zinc-600 hover:text-zinc-300 text-base transition-all duration-200"
+                  style={{ transform: collapsed ? 'rotate(180deg)' : 'rotate(0deg)' }}
+                  title={collapsed ? 'Expand' : 'Collapse'}
+                >
+                  expand_more
+                </button>
+              )}
+              <button
+                onClick={() => {
+                  if (showInspector) setInspectedEntity(null);
+                  else setOpen(false);
+                }}
+                className="material-symbols-outlined text-zinc-600 hover:text-zinc-300 text-base transition-colors"
+                title="Close"
+              >
+                close
+              </button>
+            </div>
           </div>
 
-          <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-between">
-            {[
-              { label: 'Simulations', value: '1' },
-              { label: 'Bodies',      value: String(
-                (getEngine()
-                  ? Math.max(0, Matter.Composite.allBodies(getEngine().world).length)
-                  : 0)
-              ).padStart(1, '0') },
-              { label: 'Elapsed',     value: runState !== 'idle' ? 'Live' : '0s' },
-            ].map(({ label, value }) => (
-              <div key={label} className="flex flex-col items-center gap-0.5">
-                <span className="text-[8px] font-label text-zinc-700 uppercase tracking-widest">
-                  {label}
-                </span>
-                <span className="text-xs font-headline font-semibold text-on-surface-variant">
-                  {value}
-                </span>
+          <div
+            className="overflow-hidden transition-all duration-300"
+            style={{ maxHeight: (collapsed && !showInspector) ? '0px' : '800px' }} 
+          >
+            {!showInspector && (
+              <div className="px-3 py-3 border-b border-white/[0.05]">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[9px] font-label text-zinc-600 uppercase tracking-widest">
+                    Energy over time
+                  </span>
+                  <div className="flex gap-3 text-[8px] font-label text-zinc-700 uppercase tracking-wider">
+                    {chartData.length > 0 && (
+                      <>
+                        <span className="text-primary">
+                          KE: {(chartData.at(-1)?.ke ?? 0).toFixed(1)} J
+                        </span>
+                        <span className="text-primary-fixed">
+                          PE: {(chartData.at(-1)?.pe ?? 0).toFixed(1)} J
+                        </span>
+                      </>
+                    )}
+                  </div>
+                </div>
+                <EnergyBarChart data={chartData} />
               </div>
-            ))}
+            )}
+
+            <div className="bg-surface-container-lowest/60 px-4 py-3 border-b border-white/[0.05] overflow-y-auto no-scrollbar max-h-[320px]">
+              <h5 className="text-[8px] font-headline font-bold text-zinc-600 uppercase tracking-widest mb-3 flex items-center gap-1.5">
+                <span className="material-symbols-outlined text-xs">
+                  {inspectedEntity ? 'tune' : (activeEntity ? 'speed' : 'radio_button_unchecked')}
+                </span>
+                {inspectedEntity ? 'Inspector' : 'Live Fastest Object'}
+                {activeEntity?.entity && (
+                  <span className="ml-auto text-zinc-700 normal-case tracking-normal font-label font-normal">
+                    #{activeEntity.entity.id}
+                  </span>
+                )}
+              </h5>
+              {/* INLINED TABLE */}
+              <ObjectPropertiesTable activeEntity={activeEntity?.entity} type={activeEntity?.type} isInspected={!!inspectedEntity} />
+            </div>
+
+            {!showInspector && (
+              <div className="px-4 py-2 border-t border-white/[0.04] flex items-center justify-between">
+                {[
+                  { label: 'Simulations', value: '1' },
+                  { label: 'Bodies',      value: String(
+                    (getEngine()
+                      ? Math.max(0, Matter.Composite.allBodies(getEngine().world).length)
+                      : 0)
+                  ).padStart(1, '0') },
+                  { label: 'Elapsed',     value: runState !== 'idle' ? 'Live' : '0s' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex flex-col items-center gap-0.5">
+                    <span className="text-[8px] font-label text-zinc-700 uppercase tracking-widest">
+                      {label}
+                    </span>
+                    <span className="text-xs font-headline font-semibold text-on-surface-variant">
+                      {value}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
-      </div>
+      )}
+
 
       <ExperimentAnalytics />
     </div>
